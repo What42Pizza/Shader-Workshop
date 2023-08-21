@@ -1,6 +1,6 @@
 varying vec2 texcoord;
 varying vec2 lmcoord;
-varying vec3 glcolor;
+varying vec4 glcolor;
 
 #include "../lib/lighting.glsl"
 #include "/lib/fog.glsl"
@@ -12,30 +12,20 @@ varying vec3 glcolor;
 #ifdef FSH
 
 void main() {
-	vec4 color = texture2D(MAIN_BUFFER, texcoord);
+	vec4 color = texture2D(MAIN_BUFFER, texcoord) * glcolor;
 	#ifdef DEBUG_OUTPUT_ENABLED
 		vec3 debugOutput = vec3(0.0);
 	#endif
 	
 	
+	// main lighting
+	vec3 brightnesses = getLightingBrightnesses(lmcoord);
+	color.rgb *= getLightColor(brightnesses.x, brightnesses.y, brightnesses.z);
+	
+	
 	// bloom value
 	#ifdef BLOOM_ENABLED
 		vec4 colorForBloom = color;
-	#endif
-	
-	
-	// main lighting
-	color.rgb *= glcolor;
-	vec3 brightnesses = getLightingBrightnesses(lmcoord);
-	color.rgb *= getLightColor(brightnesses.x, brightnesses.y, brightnesses.z);
-	#ifdef SHOW_SUNLIGHT
-		debugOutput = vec3(brightnesses.y);
-	#endif
-	#ifdef SHOW_BRIGHTNESSES
-		debugOutput = brightnesses;
-	#endif
-	
-	#ifdef BLOOM_ENABLED
 		#ifdef OVERWORLD
 			float blockLight = brightnesses.x;
 			float skyLight = brightnesses.y;
@@ -82,6 +72,7 @@ void main() {
 #ifdef VSH
 
 #include "/lib/waving.glsl"
+#include "/lib/taa_jitter.glsl"
 
 void main() {
 	texcoord = (gl_TextureMatrix[0] * gl_MultiTexCoord0).xy;
@@ -102,7 +93,7 @@ void main() {
 	
 	
 	#ifdef TAA_ENABLED
-		gl_Position.xy += taaOffset * gl_Position.w;
+		gl_Position.xy = TAAJitter(gl_Position.xy, gl_Position.w);
 	#endif
 	
 	
@@ -111,15 +102,20 @@ void main() {
 	#endif
 	
 	
-	glcolor = gl_Color.rgb;
+	glcolor = gl_Color;
 	#ifdef USE_SIMPLE_LIGHT
-		if (glcolor.r == glcolor.g && glcolor.g == glcolor.b) {
-			glcolor = vec3(1.0);
+		if (glcolor.r == glcolor.b) {
+			glcolor = vec4(1.0);
 		}
 	#endif
 	
 	
-	doPreLighting();
+	#ifdef HANDHELD_LIGHT_ENABLED
+		doPreLighting(length(worldPos.xyz));
+	#else
+		doPreLighting();
+	#endif
+	
 	
 }
 

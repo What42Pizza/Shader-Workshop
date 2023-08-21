@@ -54,5 +54,6 @@ void doDOF(inout vec3 color DEBUG_ARG_OUT) {
 	vec3 farBlur = getBlurredColor(texcoord, farBlurAmount * blurSizeMult * DOF_FAR_BLUR_SIZE);
 	color = mix(color, farBlur, min(farBlurAmount, 1.0));
 	color = mix(color, nearBlur, min(nearBlurAmount, 1.0));
+	//color = vec3(blurSizeMult);
 	
 }

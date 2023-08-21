@@ -7,6 +7,8 @@
 
 
 
+const float regularEdge = 20.0;
+
 const int clampingOffsetCount = 8;
 ivec2 clampingOffsets[clampingOffsetCount] = ivec2[clampingOffsetCount](
 	ivec2(-1, -1),
@@ -37,13 +39,19 @@ vec2 reprojection(vec3 pos, vec3 cameraOffset) {
 
 
 
-void neighbourhoodClamping(vec3 color, inout vec3 prevColor, float rawDepth) {
+void neighbourhoodClamping(vec3 color, inout vec3 prevColor, float rawDepth, inout float edge) {
 	float depth = toLinearDepth(rawDepth);
 	vec3 minColor = color;
 	vec3 maxColor = color;
 	
 	for (int i = 0; i < clampingOffsetCount; i++) {
 		ivec2 offsetCoord = texelcoord + clampingOffsets[i];
+		
+		float offsetDepth = toLinearDepth(texelFetch(depthtex1, offsetCoord, 0).r);
+		if (!depthIsSky(depth) && abs(offsetDepth - depth) > 0.09) {
+			edge = regularEdge;
+		}
+		
 		vec3 offsetColor = texelFetch(MAIN_BUFFER, offsetCoord, 0).rgb;
 		minColor = min(minColor, offsetColor);
 		maxColor = max(maxColor, offsetColor);
@@ -56,36 +64,34 @@ void neighbourhoodClamping(vec3 color, inout vec3 prevColor, float rawDepth) {
 
 void doTAA(inout vec3 color, inout vec3 newPrev, float depth, float linearDepth, vec2 prevCoord, float handFactor) {
 	
-	if (
-		prevCoord.x < 0.0 || prevCoord.x > 1.0 ||
-		prevCoord.y < 0.0 || prevCoord.y > 1.0
-	) {
-		newPrev = color;
-		return;
-	}
-	
 	vec3 prevColor = texture2D(TAA_PREV_BUFFER, prevCoord).rgb;
+	//if (prevColor == vec3(0.0)) { // Fixes the first frame
+	//	newPrev = color;
+	//	return;
+	//}
 	
-	neighbourhoodClamping(color, prevColor, depth);
+	float edge = 0.0;
+	neighbourhoodClamping(color, prevColor, depth, edge);
 	
 	const float blendMin = 0.3;
 	const float blendMax = 0.98;
 	const float blendVariable = 0.2;
 	const float blendConstant = 0.65;
-	const float depthFactor = 0.13;
+	const float depthFactor = 0.125;
 	
 	vec2 velocity = (texcoord - prevCoord.xy) * viewSize;
 	float velocityAmount = dot(velocity, velocity) * 10.0;
 	
 	float blendAmount = blendConstant
 		+ exp(-velocityAmount) * blendVariable
+		//- length(cameraOffset) * edge
 		+ sqrt(linearDepth) * depthFactor
 		+ handFactor;
 	blendAmount = clamp(blendAmount, blendMin, blendMax);
-	//blendAmount *= float(
-	//	prevCoord.x > 0.0 && prevCoord.x < 1.0 &&
-	//	prevCoord.y > 0.0 && prevCoord.y < 1.0
-	//);
+	blendAmount *= float(
+		prevCoord.x > 0.0 && prevCoord.x < 1.0 &&
+		prevCoord.y > 0.0 && prevCoord.y < 1.0
+	);
 	
 	color = mix(color, prevColor, blendAmount);
 	newPrev = color;

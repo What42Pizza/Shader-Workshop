@@ -10,6 +10,8 @@ varying vec2 texcoord;
 
 #ifdef FSH
 
+#include "/lib/ssao.glsl"
+
 void main() {
 	vec3 color = texelFetch(MAIN_BUFFER, texelcoord, 0).rgb;
 	#ifdef DEBUG_OUTPUT_ENABLED
