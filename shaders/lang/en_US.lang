@@ -102,7 +102,11 @@ option.shadowDistance.comment=Maximum distance that shadows are rendered\n\n(Per
 option.SHADOW_DISTORT_EXP=Shadow Distort Exponent
 option.SHADOW_DISTORT_EXP.comment=How much more to render closer objects. Higher values increase the resolution of closer objects, lower values increase the resolution of of further objects.\n\n(Performance cost: None)
 option.SHADOW_FILTERING=Shadow Filtering
-option.SHADOW_FILTERING.comment=Shoothens shadow edges (works best with TAA)\n\n(Performance cost: Medium-Low)
+option.SHADOW_FILTERING.comment=Shoothens shadow edges (works best with TAA)\n\n(Performance cost: Low)
+value.SHADOW_FILTERING.0=Off
+value.SHADOW_FILTERING.1=Low
+value.SHADOW_FILTERING.2=Medium
+value.SHADOW_FILTERING.3=High
 option.EXCLUDE_FOLIAGE=Exlude Foliage
 option.EXCLUDE_FOLIAGE.comment=If true, foliage will not cast shadows\n\n(Performance cost: Low)
 option.sunPathRotation=Sun Path Rotation
@@ -122,8 +126,6 @@ screen.HANDHELD_LIGHT_SETTINGS=Handheld Light
 option.HANDHELD_LIGHT_ENABLED=Handheld Light Enabled
 option.HANDHELD_LIGHT_DISTANCE=Handheld Light Distance
 option.HANDHELD_LIGHT_BRIGHTNESS=Handheld Light Brightness
-option.HANDHELD_LIGHT_USE_FIXED_DEPTH=Use Fixed Depth
-option.HANDHELD_LIGHT_USE_FIXED_DEPTH.comment=Gives correct lighting to things like entities (by default it uses an already calculated value as an estimation)
 
 
 
@@ -160,8 +162,6 @@ option.BLOOM_LOW_CUTOFF=Bloom Low Cutoff
 option.BLOOM_LOW_CUTOFF.comment=The value at which all colors are treated as equally dark
 option.BLOOM_HIGH_CUTOFF=Bloom High Cutoff
 option.BLOOM_HIGH_CUTOFF.comment=The value at which all colors are treated as equally light
-option.BLOOM_CURVE=Bloom Curve
-option.BLOOM_CURVE.comment=How quickly darker colors are ignored
 option.BLOOM_SKY_BRIGHTNESS=Bloom Sky Brightness
 option.BLOOM_ENTITY_BRIGHTNESS=Bloom Entity Brightness
 option.BLOOM_CLOUD_BRIGHTNESS=Bloom Cloud Brightness
@@ -277,11 +277,13 @@ option.CONTRAST_DETECT_BLUE=Contrast Detect Blue
 option.CONTRAST_DETECT_BLUE.comment=Contrast Detect is the color that Contrast moves away from
 
 option.TONEMAPPER=Tonemapper
-option.TONEMAPPER.comment=This defines how light data is interpreted.\n\nNone: clamps the value into 0-1\nExtra simple: uses smoothMin and smoothMax to clamp into 0-1\nSimple: Custom simple tonemapper\nACES: Industry standard for good, realistic graphics
+option.TONEMAPPER.comment=This defines how light data is interpreted.\n\nNone: clamps the value into 0-1\nExtra simple: same as 'none' but uses a smoothened clamp function\nSimple: Custom simple tonemapper\nACES: Industry standard for good, realistic graphics
 value.TONEMAPPER.0=None
 value.TONEMAPPER.1=Extra Simple
 value.TONEMAPPER.2=Simple
 value.TONEMAPPER.3=ACES
+option.USE_GAMMA_CORRECTION=Use Gamma Correction
+option.USE_GAMMA_CORRECTION.comment=Corrects for gamma before and after color correction
 
 
 
@@ -294,7 +296,6 @@ option.VIGNETTE_AMOUNT_SURFACE.comment=The amount of vignette when exposed to su
 option.VIGNETTE_AMOUNT_UNDERGROUND=Vignette Amount Underground
 option.VIGNETTE_AMOUNT_UNDERGROUND.comment=The amount of vignette when not exposed to sunlight
 option.VIGNETTE_SCALE=Vignette Scale
-option.VIGNETTE_CURVE=Vignette Curve
 option.VIGNETTE_NOISE_ENABLED=Vignette Noise Enabled
 option.VIGNETTE_NOISE_ENABLED.comment=Adds a slight amount of noise to the Vignette to prevent banding
 
@@ -331,6 +332,10 @@ option.SHOW_DANGEROUS_LIGHT=Show Dangerous Light
 option.SHOW_DANGEROUS_LIGHT.comment=Show areas where hostile mobs can spawn
 option.USE_SIMPLE_LIGHT=Use Simple Light
 option.USE_SIMPLE_LIGHT.comment=Breaks the lighting in a strangely artistic way
+option.SHOW_SUNLIGHT=Show Sunlight
+option.SHOW_SUNLIGHT.comment=Shows the sunlight. Useful for seeing shadow filtering, light leaks, etc
+option.SHOW_BRIGHTNESSES=Show Brightnesses
+option.SHOW_BRIGHTNESSES.comment=Shows the block brightness (red), sky brightness (green), and ambient brightness (blue)
 option.SSAO_SHOW_AMOUNT=SSAO Show Amount
 option.SSAO_SHOW_AMOUNT.comment=Show the amount of ssao that is applied
 option.BLOOM_SHOW_ADDITION=Show Bloom Addition

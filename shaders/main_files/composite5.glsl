@@ -8,15 +8,6 @@ varying vec2 texcoord;
 
 
 
-// custom tonemapper, probably trash according to color theory
-vec3 simpleTonemap(vec3 color) {
-	vec3 lowCurve = color * color;
-	vec3 highCurve = 1.0 - 1.0 / (color * 10.0 + 1.0);
-	return mix(lowCurve, highCurve, color);
-}
-
-
-
 #ifdef FSH
 
 #include "/lib/sharpening.glsl"
@@ -49,11 +40,11 @@ void main() {
 	#ifdef VIGNETTE_ENABLED
 		float vignetteSkyAmount = 1.0 - eyeBrightnessSmooth.y / 240.0;
 		vignetteSkyAmount = vignetteSkyAmount * (VIGNETTE_AMOUNT_UNDERGROUND - VIGNETTE_AMOUNT_SURFACE) + VIGNETTE_AMOUNT_SURFACE;
-		float vignetteAlpha = length(texcoord - 0.5) * VIGNETTE_SCALE;
+		float vignetteAlpha = length(texcoord - 0.5) * VIGNETTE_SCALE * 0.7;
 		#ifdef VIGNETTE_NOISE_ENABLED
 			vignetteAlpha += noise(texcoord, 0) * 0.01;
 		#endif
-		vignetteAlpha = pow(vignetteAlpha, VIGNETTE_CURVE) * vignetteSkyAmount;
+		vignetteAlpha *= vignetteSkyAmount;
 		color *= 1.0 - vignetteAlpha;
 	#endif
 	
