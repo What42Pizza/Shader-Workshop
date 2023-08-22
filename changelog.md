@@ -1,5 +1,12 @@
 <br>
 
+- a1.1.0 (23/08/20)
+  - Updated to W42SH b1.5.1
+  - Reverted constant sky color
+  - More tuning
+
+<br>
+
 - **a1.0.0** (23/08/17)
   - Started tuning
 
@@ -7,6 +14,28 @@
 <br>
 
 ## Old Changelog: (from What42's Shader Base (aka W42SB))
+
+- b1.5.1 (23/08/19)
+  - Re-added shadow filtering levels
+  - Improved handheld light (and removed 'Use Fixed Depth' option)
+  - Maybe improved performance
+
+<br>
+
+- **b1.5.0** (23/08/18)
+  - Added settings:
+  - - 'Use Gamma Correction' (no new functionality, just allows stuff to be disabled)
+  - - 'Show Sunlight'
+  - - 'Show Brightnesses'
+  - Removed settings: (to improve performance)
+  - - 'Bloom Curve'
+  - - 'Vignette Curve'
+  - Improved effects:
+  - - Shadow filtering
+  - - SSAO
+  - - Bloom
+  - Improved performance (in multiple ways)
+  - Tweaked many settings
 
 <br>
 <br>

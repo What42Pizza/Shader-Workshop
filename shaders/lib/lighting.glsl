@@ -1,11 +1,46 @@
-varying float sideShading;
-varying float lightDotMult;
+varying float skyBrightnessMult;
 
 #ifdef SHADOWS_ENABLED
 	varying vec3 shadowPos;
 	varying float offsetMult;
 	
-	#ifdef SHADOW_FILTERING
+	#if SHADOW_FILTERING == 1
+		const int SHADOW_OFFSET_COUNT = 9;
+		const float SHADOW_OFFSET_WEIGHTS_TOTAL = 1.0 + 0.94 * 8;
+		const vec3[SHADOW_OFFSET_COUNT] SHADOW_OFFSETS = vec3[SHADOW_OFFSET_COUNT] (
+			vec3( 0.0,  0.0, 1.0 ),
+			vec3( 0.7,  0.0, 0.94),
+			vec3( 0.0,  0.7, 0.94),
+			vec3(-0.7,  0.0, 0.94),
+			vec3( 0.0, -0.7, 0.94),
+			vec3( 0.5,  0.5, 0.94),
+			vec3(-0.5,  0.5, 0.94),
+			vec3( 0.5, -0.5, 0.94),
+			vec3(-0.5, -0.5, 0.94)
+		);
+	#elif SHADOW_FILTERING == 2
+		const int SHADOW_OFFSET_COUNT = 17;
+		const float SHADOW_OFFSET_WEIGHTS_TOTAL = 1.0 + 0.94 * 8 + 0.78 * 8;
+		const vec3[SHADOW_OFFSET_COUNT] SHADOW_OFFSETS = vec3[SHADOW_OFFSET_COUNT] (
+			vec3( 0.0 ,  0.0 , 1.0 ),
+			vec3( 0.5 ,  0.0 , 0.94),
+			vec3( 0.0 ,  0.5 , 0.94),
+			vec3(-0.5 ,  0.0 , 0.94),
+			vec3( 0.0 , -0.5 , 0.94),
+			vec3( 0.35,  0.35, 0.94),
+			vec3(-0.35,  0.35, 0.94),
+			vec3( 0.35, -0.35, 0.94),
+			vec3(-0.35, -0.35, 0.94),
+			vec3( 0.38,  0.92, 0.78),
+			vec3( 0.92,  0.38, 0.78),
+			vec3( 0.92, -0.38, 0.78),
+			vec3( 0.38, -0.92, 0.78),
+			vec3(-0.38, -0.92, 0.78),
+			vec3(-0.92, -0.38, 0.78),
+			vec3(-0.92,  0.38, 0.78),
+			vec3(-0.38,  0.92, 0.78)
+		);
+	#elif SHADOW_FILTERING == 3
 		const int SHADOW_OFFSET_COUNT = 33;
 		const float SHADOW_OFFSET_WEIGHTS_TOTAL = 1.0 + 0.94 * 8 + 0.78 * 8 + 0.57 * 8 + 0.37 * 8;
 		const vec3[SHADOW_OFFSET_COUNT] SHADOW_OFFSETS = vec3[SHADOW_OFFSET_COUNT] (
@@ -55,11 +90,19 @@ varying float lightDotMult;
 
 
 
-float alterLightDot(float lightDot) {
+float getSkyBrightnessMult(float lightDot) {
+	
 	//return sin((lightDot + 1.0) * PI / 4.0);
+	
 	//float temp = lightDot * 0.5 - 0.5;
 	//return temp * temp * temp + 1.0;
-	return pow(max(lightDot, 0.0), 0.12);
+	
+	//return pow(max(lightDot, 0.0), 0.12);
+	
+	const float curve = 3.0;
+	const float finalFactor = 1.0 / (1.0 - 1.0 / (curve * 10.0 + 1.0));
+	return (1.0 - 1.0 / (max(lightDot, 0.0) * curve * 10.0 + 1.0)) * finalFactor;
+	
 }
 
 
@@ -73,7 +116,7 @@ vec3 getLightColor(float blockBrightness, float skyBrightness, float ambientBrig
 	
 	float ambientMin = 0.5;
 	#ifdef USE_VANILLA_BRIGHTNESS
-		ambientMin *= 0.6 + screenBrightness * 0.3;
+		ambientMin *= 0.7 + screenBrightness * 0.3;
 	#endif
 	
 	ambientBrightness = ambientBrightness * (1.0 - ambientMin) + ambientMin;
@@ -91,45 +134,37 @@ vec3 getLightColor(float blockBrightness, float skyBrightness, float ambientBrig
 // return value channels: (blockBrightness, skyBrightness, ambientBrightness)
 vec3 getLightingBrightnesses(vec2 lmcoord) {
 	
-	float blockBrightness = pow(lmcoord.x, LIGHT_DROPOFF) * sideShading;
-	float skyBrightness = 0;
-	float ambientBrightness = pow(lmcoord.y, LIGHT_DROPOFF) * sideShading;
 	
-	#ifdef HANDHELD_LIGHT_ENABLED
-		blockBrightness = max(blockBrightness, handLightBrightness);
-	#endif
+	float skyBrightness = 0;
 	
 	#ifdef SHADOWS_ENABLED
-		if (lightDotMult > alterLightDot(0.0)) {
+		if (skyBrightnessMult > 0.0) {
 			// surface is facing towards shadowLightPosition
 			
 			vec3 offsetShadowPos = shadowPos;
-			const float noiseAmount = 0.6;
-			vec2 noise = randomVec2(rngStart) * noiseAmount + 1.0 - noiseAmount / 2.0;
+			vec2 noise = normalizeNoiseAround1(randomVec2(rngStart), 0.4);
 			offsetShadowPos.xy += noise * offsetMult * 0.4;
 			
-			#ifndef SHADOW_FILTERING
+			#if SHADOW_FILTERING == 0
 				
 				// no filtering
 				if (texture2D(shadowtex0, offsetShadowPos.xy).r >= offsetShadowPos.z) {
-					skyBrightness += 1;
+					skyBrightness += 1.0;
 				}
 				
 			#else
 				
 				// filtered
-				//if (texture2D(shadowtex0, shadowPos.xy).r >= shadowPos.z - 0.05) {
-					for (int i = 0; i < SHADOW_OFFSET_COUNT; i++) {
-						if (texture2D(shadowtex0, offsetShadowPos.xy + SHADOW_OFFSETS[i].xy * offsetMult).r >= offsetShadowPos.z) {
-							float currentShadowWeight = SHADOW_OFFSETS[i].z;
-							skyBrightness += currentShadowWeight;
-						}
+				// tactic: just absorb the shadow acne and average it out, then multiply and clamp to get back to 1.0
+				for (int i = 0; i < SHADOW_OFFSET_COUNT; i++) {
+					if (texture2D(shadowtex0, offsetShadowPos.xy + SHADOW_OFFSETS[i].xy * offsetMult).r >= offsetShadowPos.z) {
+						float currentShadowWeight = SHADOW_OFFSETS[i].z;
+						skyBrightness += currentShadowWeight;
 					}
-					skyBrightness /= SHADOW_OFFSET_WEIGHTS_TOTAL;
-					skyBrightness = min(skyBrightness * 2.3, 1.0);
-				//} else {
-				//	skyBrightness = 0.5;
-				//}
+				}
+				skyBrightness /= SHADOW_OFFSET_WEIGHTS_TOTAL;
+				skyBrightness = min(skyBrightness * (2.4 - skyBrightnessMult), 1.0);
+				//skyBrightness = min(skyBrightness * 2.3, 1.0);
 				
 			#endif
 			
@@ -138,8 +173,18 @@ vec3 getLightingBrightnesses(vec2 lmcoord) {
 		skyBrightness = 1.0;
 	#endif
 	
-	skyBrightness *= lightDotMult;
-	skyBrightness *= sqrt(ambientBrightness);
+	#if !defined SHOW_SUNLIGHT
+		skyBrightness *= skyBrightnessMult;
+	#endif
+	
+	
+	float blockBrightness = lmcoord.x;
+	#ifdef HANDHELD_LIGHT_ENABLED
+		blockBrightness = max(blockBrightness, handLightBrightness);
+	#endif
+	
+	float ambientBrightness = lmcoord.y;
+	
 	
 	return vec3(blockBrightness, skyBrightness, ambientBrightness);
 }
@@ -154,32 +199,9 @@ vec3 getLightingBrightnesses(vec2 lmcoord) {
 
 #ifdef VSH
 
-#if defined HANDHELD_LIGHT_ENABLED && defined SHADER_TERRAIN
-	#define DEPTH_ARG float blockDepth
-#else
-	#define DEPTH_ARG
-#endif
 
 
-
-void doPreLighting(DEPTH_ARG) {
-	
-	
-	#if defined HANDHELD_LIGHT_ENABLED && !defined SHADER_TERRAIN
-		#define NO_DEPTH_ARG
-	#endif
-	#if defined HANDHELD_LIGHT_USE_FIXED_DEPTH && !defined SHADER_HAND
-		#define USE_WORLD_POS
-	#endif
-	
-	#ifdef NO_DEPTH_ARG
-		#ifdef USE_WORLD_POS
-			vec4 worldPos = gbufferModelViewInverse * (gl_ModelViewMatrix * gl_Vertex);
-			float blockDepth = length(worldPos.xyz);
-		#else
-			float blockDepth = gl_Position.z;
-		#endif
-	#endif
+void doPreLighting() {
 	
 	
 	float lightDot = dot(normalize(shadowLightPosition), normalize(gl_NormalMatrix * gl_Normal));
@@ -195,10 +217,10 @@ void doPreLighting(DEPTH_ARG) {
 		if (lightDot > 0.0) { // vertex is facing towards the sky
 			vec4 viewPos = gl_ModelViewMatrix * gl_Vertex;
 			vec4 worldPos = gbufferModelViewInverse * viewPos;
-			#ifndef SHADOW_FILTERING
+			#if SHADOW_FILTERING == 0
 				shadowPos = getShadowPos(viewPos, lightDot);
 			#else
-				shadowPos = getLessBiasedShadowPos(viewPos, lightDot);
+				shadowPos = getLessBiasedShadowPos(viewPos);
 			#endif
 			offsetMult = length(shadowPos.xy * 2.0 - 1.0);
 			offsetMult *= offsetMult;
@@ -207,22 +229,25 @@ void doPreLighting(DEPTH_ARG) {
 		
 	#endif
 	
-	lightDotMult = alterLightDot(lightDot);
+	skyBrightnessMult = getSkyBrightnessMult(lightDot);
+	skyBrightnessMult *= sqrt(lmcoord.y);
 	
 	
 	#ifdef HANDHELD_LIGHT_ENABLED
 		handLightBrightness = 0.0;
-		if (blockDepth <= HANDHELD_LIGHT_DISTANCE) {
-			handLightBrightness = max(1.0 - blockDepth / HANDHELD_LIGHT_DISTANCE, 0.0);
-			handLightBrightness = pow(handLightBrightness, LIGHT_DROPOFF);
+		float depth = estimateDepthVSH();
+		if (depth <= HANDHELD_LIGHT_DISTANCE) {
+			handLightBrightness = max(1.0 - depth / HANDHELD_LIGHT_DISTANCE, 0.0);
+			handLightBrightness = handLightBrightness;
 			handLightBrightness *= heldBlockLightValue / 15.0 * HANDHELD_LIGHT_BRIGHTNESS;
 		}
 	#endif
 	
 	
 	vec3 shadingNormals = vec3(abs(gl_Normal.x), gl_Normal.y, abs(gl_Normal.z));
-	sideShading = dot(shadingNormals, vec3(-0.3, 0.5, 0.3));
+	float sideShading = dot(shadingNormals, vec3(-0.3, 0.5, 0.3));
 	sideShading = sideShading * SIDE_SHADING * 0.5 + 1.0;
+	lmcoord *= sideShading;
 	
 	
 }
