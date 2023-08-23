@@ -283,7 +283,7 @@ const float ambientOcclusionLevel = 1.0; // [0.0 0.1 0.2 0.3 0.4 0.5 0.6 0.7 0.8
 
 
 
-#define SHADOW_DISTORT_ADDITION 0.12
+#define SHADOW_DISTORT_ADDITION 0.05
 
 #define LIGHT_SMOOTHING 0.1
 
@@ -291,8 +291,8 @@ const float ambientOcclusionLevel = 1.0; // [0.0 0.1 0.2 0.3 0.4 0.5 0.6 0.7 0.8
 
 
 
-const float SHADOW_OFFSET_INCREASE = 1.5 / shadowMapResolution;
-const float SHADOW_OFFSET_MIN = 1.0 / shadowMapResolution;
+const float SHADOW_OFFSET_INCREASE = 0.9 / shadowMapResolution;
+const float SHADOW_OFFSET_MIN = 1.3 / shadowMapResolution;
 
 const int AO_SAMPLE_COUNT = AO_QUALITY * AO_QUALITY;
 const int BLOOM_SAMPLE_COUNT = BLOOM_QUALITY * BLOOM_QUALITY;

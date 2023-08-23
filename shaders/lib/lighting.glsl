@@ -142,8 +142,8 @@ vec3 getLightingBrightnesses(vec2 lmcoord) {
 			// surface is facing towards shadowLightPosition
 			
 			vec3 offsetShadowPos = shadowPos;
-			vec2 noise = normalizeNoiseAround1(randomVec2(rngStart), 0.4);
-			offsetShadowPos.xy += noise * offsetMult * 0.4;
+			vec2 noise = randomVec2(rngStart);
+			offsetShadowPos.xy += noise * offsetMult * 0.25;
 			
 			#if SHADOW_FILTERING == 0
 				
@@ -163,8 +163,9 @@ vec3 getLightingBrightnesses(vec2 lmcoord) {
 					}
 				}
 				skyBrightness /= SHADOW_OFFSET_WEIGHTS_TOTAL;
-				skyBrightness = min(skyBrightness * (2.4 - skyBrightnessMult), 1.0);
-				//skyBrightness = min(skyBrightness * 2.3, 1.0);
+				const float shadowMult1 = 1.0; // for when lightDot is 1.0 (sun is directly facing surface)
+				const float shadowMult2 = 2.2; // for when lightDot is 0.0 (sun is angled relative to surface)
+				skyBrightness = min(skyBrightness * (shadowMult2 - skyBrightnessMult * (shadowMult2 - shadowMult1)), 1.0);
 				
 			#endif
 			
@@ -223,7 +224,6 @@ void doPreLighting() {
 				shadowPos = getLessBiasedShadowPos(viewPos);
 			#endif
 			offsetMult = length(shadowPos.xy * 2.0 - 1.0);
-			offsetMult *= offsetMult;
 			offsetMult = offsetMult * SHADOW_OFFSET_INCREASE + SHADOW_OFFSET_MIN;
 		}
 		

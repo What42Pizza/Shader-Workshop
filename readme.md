@@ -1,4 +1,4 @@
-# Dishonored Shader a1.1.0
+# Dishonored Shader a1.1.1
 
 This is a shader that attempts to look like the game [Dishonored](https://store.steampowered.com/agecheck/app/205100/). The base shader pack is What42's Shader Base (link in credits).
 

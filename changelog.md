@@ -1,5 +1,10 @@
 <br>
 
+- a1.1.1 (23/08/23)
+  - Updated shadows to W42SB b1.5.2
+
+<br>
+
 - a1.1.0 (23/08/20)
   - Updated to W42SH b1.5.1
   - Reverted constant sky color
