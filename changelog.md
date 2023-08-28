@@ -1,5 +1,10 @@
 <br>
 
+- b1.1.2 (23/08/27)
+  - Tuned rain colors
+
+<br>
+
 - a1.1.1 (23/08/23)
   - Updated shadows to W42SB b1.5.2
 

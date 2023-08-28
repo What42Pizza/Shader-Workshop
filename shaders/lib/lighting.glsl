@@ -91,18 +91,9 @@ varying float skyBrightnessMult;
 
 
 float getSkyBrightnessMult(float lightDot) {
-	
-	//return sin((lightDot + 1.0) * PI / 4.0);
-	
-	//float temp = lightDot * 0.5 - 0.5;
-	//return temp * temp * temp + 1.0;
-	
-	//return pow(max(lightDot, 0.0), 0.12);
-	
 	const float curve = 3.0;
 	const float finalFactor = 1.0 / (1.0 - 1.0 / (curve * 10.0 + 1.0));
 	return (1.0 - 1.0 / (max(lightDot, 0.0) * curve * 10.0 + 1.0)) * finalFactor;
-	
 }
 
 
@@ -110,9 +101,13 @@ float getSkyBrightnessMult(float lightDot) {
 #ifdef FSH
 
 vec3 getLightColor(float blockBrightness, float skyBrightness, float ambientBrightness) {
-	vec4 skylightPercents = getSkylightPercents();
-	vec3 skyColor = getSkyColor(skylightPercents);
-	vec3 ambientColor = getAmbientColor(skylightPercents);
+	vec3 ambientColor = getAmbientColor(rawSkylightPercents);
+	vec4 alteredSkylightPercents = rawSkylightPercents;
+	alteredSkylightPercents.xzw *= 1.0 - betterRainStrength * (1.0 - RAIN_LIGHT_MULT);
+	vec3 skyColor = getSkyColor(alteredSkylightPercents);
+	
+	skyColor = mix(vec3(getColorLum(skyColor)), skyColor, 1.0 - betterRainStrength * 0.9);
+	ambientColor = mix(vec3(getColorLum(ambientColor)), ambientColor, 1.0 - betterRainStrength * 0.9);
 	
 	float ambientMin = 0.5;
 	#ifdef USE_VANILLA_BRIGHTNESS

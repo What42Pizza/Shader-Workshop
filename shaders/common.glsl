@@ -457,11 +457,11 @@ vec3 getLessBiasedShadowPos(vec4 viewPos) {
 
 
 
-vec4 getSkylightPercents() {
-	vec4 skylightPercents = rawSkylightPercents;
-	skylightPercents.xzw *= 1.0 - rainStrength * (1.0 - RAIN_LIGHT_MULT);
-	return skylightPercents;
-}
+//vec4 getSkylightPercents() {
+//	vec4 skylightPercents = rawSkylightPercents;
+//	skylightPercents.xzw *= 1.0 - rainStrength * (1.0 - RAIN_LIGHT_MULT);
+//	return skylightPercents;
+//}
 
 
 

@@ -64,21 +64,21 @@ void calculateLightCoord() {
 // this entire function SHOULD be computed on the cpu, but it has to be glsl code because it uses settings that are ONLY defined in glsl
 void calculateSunraysAmount() {
 	
-	vec4 skylightPercents = getSkylightPercents();
-	
 	sunraysAmountMult =
-		skylightPercents.x * SUNRAYS_AMOUNT_DAY +
-		skylightPercents.y * SUNRAYS_AMOUNT_NIGHT +
-		skylightPercents.z * SUNRAYS_AMOUNT_SUNRISE +
-		skylightPercents.w * SUNRAYS_AMOUNT_SUNSET;
+		rawSkylightPercents.x * SUNRAYS_AMOUNT_DAY +
+		rawSkylightPercents.y * SUNRAYS_AMOUNT_NIGHT +
+		rawSkylightPercents.z * SUNRAYS_AMOUNT_SUNRISE +
+		rawSkylightPercents.w * SUNRAYS_AMOUNT_SUNSET;
 	
 	if (isOtherLightSource) {
 		if (isSun) {
-			sunraysAmountMult *= skylightPercents.x + skylightPercents.z + skylightPercents.w;
+			sunraysAmountMult *= rawSkylightPercents.x + rawSkylightPercents.z + rawSkylightPercents.w;
 		} else {
-			sunraysAmountMult *= skylightPercents.y;
+			sunraysAmountMult *= rawSkylightPercents.y;
 		}
 	}
+	
+	sunraysAmountMult *= 1.0 - betterRainStrength * 0.7;
 	
 	sunraysAmountMult *= 0.3;
 	
