@@ -35,6 +35,11 @@ uniform vec3 sunPosition;
 uniform vec3 moonPosition;
 uniform vec3 shadowLightPosition;
 
+#ifdef VSH
+	attribute vec4 mc_Entity;
+	attribute vec2 mc_midTexCoord;
+#endif
+
 uniform sampler2D texture;
 uniform sampler2D lightmap;
 uniform sampler2D colortex0;
@@ -42,13 +47,7 @@ uniform sampler2D colortex1;
 uniform sampler2D colortex2;
 uniform sampler2D colortex3;
 uniform sampler2D colortex4;
-uniform sampler2D colortex5;
-uniform sampler2D colortex6;
-uniform sampler2D colortex7;
-uniform sampler2D colortex8;
-uniform sampler2D colortex9;
-uniform sampler2D colortex10;
-uniform sampler2D colortex11;
+uniform sampler2D gaux2;
 uniform sampler2D depthtex0;
 uniform sampler2D depthtex1;
 uniform sampler2D depthtex2;
@@ -94,24 +93,19 @@ uniform float invFarMinusNear;
 
 // misc data
 
-#ifdef FSH
-	ivec2 texelcoord = ivec2(gl_FragCoord.xy);
-#endif
-
-#ifdef VSH
-	attribute vec4 mc_Entity;
-	attribute vec2 mc_midTexCoord;
-#endif
-
 varying vec3 testValue;
-
-#define HAND_DEPTH 0.19 // idk what should actually be here
 
 #ifdef FSH
 	#define flat flat in
 #else
 	#define flat flat out
 #endif
+
+#ifdef FSH
+	ivec2 texelcoord = ivec2(gl_FragCoord.xy);
+#endif
+
+#define HAND_DEPTH 0.19 // idk what should actually be here
 
 #ifdef DEBUG_OUTPUT_ENABLED
 	#define DEBUG_ARG_IN , debugOutput
@@ -125,43 +119,18 @@ varying vec3 testValue;
 
 // buffer values:
 
-#define MAIN_BUFFER             colortex0
-#define TAA_PREV_BUFFER         colortex1
-#define BLOOM_BUFFER            colortex2
-#define NOISY_ADDITIONS_BUFFER  colortex3
-#define DEBUG_BUFFER            colortex0
+#define MAIN_BUFFER                 colortex0
+#define TAA_PREV_BUFFER             colortex1
+#define BLOOM_BUFFER                colortex2
+#define REFLECTION_STRENGTH_BUFFER  colortex3
+#define NOISY_ADDITIONS_BUFFER      colortex3
+#define NORMALS_BUFFER              colortex4
+#define MAIN_BUFFER_COPY            gaux2
+#define DEBUG_BUFFER                colortex0
 
 #define DEPTH_BUFFER_ALL                   depthtex0
 #define DEPTH_BUFFER_WO_TRANS              depthtex1
 #define DEPTH_BUFFER_WO_TRANS_OR_HANDHELD  depthtex2
-
-// DON'T DELETE:
-/*
-const bool colortex1Clear = false;
-const bool colortex0MipmapEnabled = true;
-const bool colortex3MipmapEnabled = true;
-const float wetnessHalflife = 50.0f;
-const float drynessHalflife = 50.0f;
-const float centerDepthHalflife = 2.0f;
-const int noiseTextureResolution = 256;
-*/
-
-
-
-
-
-// CODE FROM COMPLEMENTARY REIMAGINED:
-
-//vec3 screenToView(vec3 pos) {
-//	vec4 iProjDiag = vec4(gbufferProjectionInverse[0].x,
-//						  gbufferProjectionInverse[1].y,
-//						  gbufferProjectionInverse[2].zw);
-//    vec3 p3 = pos * 2.0 - 1.0;
-//    vec4 viewPos = iProjDiag * p3.xyzz + gbufferProjectionInverse[3];
-//    return viewPos.xyz / viewPos.w;
-//}
-
-// END OF COMPLEMENTARY REIMAGINED'S CODE
 
 
 
@@ -279,6 +248,14 @@ vec3 cubicInterpolate(vec3 edge0, vec3 edge1, vec3 edge2, vec3 edge3, float valu
 	return vec3(x, y, z);
 }
 
+vec4 startMat(vec3 screenPos) {
+	return vec4(screenPos.xyz, 1.0);
+}
+
+vec3 endMat(vec4 screenPos) {
+	return screenPos.xyz/screenPos.w;
+}
+
 float toLinearDepth(float depth) {
 	return twoTimesNear / (farPlusNear - depth * farMinusNear);
 }
@@ -306,8 +283,8 @@ bool depthIsHand(float depth) {
 	}
 #else
 	float estimateDepthVSH() {
-		float len = length(gl_Position.xy / gl_Position.w);
-		return gl_Position.z * (1.0 + len * len * 0.3);
+		float len = length(gl_Position.xy) / max(gl_Position.w, 1.0);
+		return gl_Position.z * (1.0 + len * len * 0.7);
 	}
 #endif
 
@@ -393,6 +370,42 @@ vec3 normalizeNoiseAround1(vec3 noise, float range) {
 
 
 
+// CODE FROM COMPLEMENTARY REIMAGINED:
+
+vec3 screenToView(vec3 pos) {
+	vec4 iProjDiag = vec4(
+		gbufferProjectionInverse[0].x,
+		gbufferProjectionInverse[1].y,
+		gbufferProjectionInverse[2].zw
+	);
+	vec3 p3 = pos * 2.0 - 1.0;
+	vec4 viewPos = iProjDiag * p3.xyzz + gbufferProjectionInverse[3];
+	return viewPos.xyz / viewPos.w;
+}
+
+float sqrt3(float x) {
+	x = 1.0 - x;
+	x *= x;
+	x *= x;
+	x *= x;
+	return 1.0 - x;
+}
+
+// END OF COMPLEMENTARY REIMAGINED'S CODE
+
+vec3 getViewPos(vec2 coords, float rawDepth) {
+	float linearDepth = toLinearDepth(rawDepth);
+	if (depthIsSky(linearDepth) || depthIsHand(linearDepth)) {
+		return vec3(0.0);
+	}
+	vec3 screenPos = vec3(coords, rawDepth);
+	return screenToView(screenPos);
+}
+
+
+
+
+
 #ifdef FSH
 
 float fogify(float x, float w) {
@@ -454,14 +467,6 @@ vec3 getLessBiasedShadowPos(vec4 viewPos) {
 }
 
 
-
-
-
-//vec4 getSkylightPercents() {
-//	vec4 skylightPercents = rawSkylightPercents;
-//	skylightPercents.xzw *= 1.0 - rainStrength * (1.0 - RAIN_LIGHT_MULT);
-//	return skylightPercents;
-//}
 
 
 

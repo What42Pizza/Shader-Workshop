@@ -1,6 +1,12 @@
 <br>
 
-- b1.1.2 (23/08/27)
+- v1.0.0 (23/08/31)
+  - Upadted to W42SB b1.6.3
+
+<br>
+<br>
+
+- a1.1.2 (23/08/27)
   - Tuned rain colors
 
 <br>
@@ -24,6 +30,41 @@
 <br>
 
 ## Old Changelog: (from What42's Shader Base (aka W42SB))
+
+<br>
+
+- b1.6.3 (23/08/30)
+  - Updated license
+
+<br>
+
+- b1.6.2 (23/08/29)
+  - Added rain reflections
+  - Added water fresnel addition
+  - Updated license
+
+<br>
+
+- b1.6.1 (23/08/28)
+  - Added water reflections to settings
+  - Added proper waving water
+  - Tweaked water reflection colors
+
+<br>
+
+- **b1.6.0** (23/08/26)
+  - Added water reflections (more to come!)
+  - Added waving water
+
+<br>
+<br>
+
+- b1.5.2
+  - Significantly improved close-up shadows
+  - Fixed handheld light for blocks that were too close
+  - Many small tweaks to bloom, taa, etc
+
+<br>
 
 - b1.5.1 (23/08/19)
   - Re-added shadow filtering levels

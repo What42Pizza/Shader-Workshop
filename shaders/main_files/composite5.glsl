@@ -10,7 +10,9 @@ varying vec2 texcoord;
 
 #ifdef FSH
 
-#include "/lib/sharpening.glsl"
+#ifdef SHARPENING_ENABLED
+	#include "/lib/sharpening.glsl"
+#endif
 #include "/lib/color_correction.glsl"
 
 void main() {

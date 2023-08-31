@@ -10,8 +10,12 @@ varying vec2 texcoord;
 
 #ifdef FSH
 
-#include "/lib/taa.glsl"
-#include "/lib/motion_blur.glsl"
+#ifdef TAA_ENABLED
+	#include "/lib/taa.glsl"
+#endif
+#ifdef MOTION_BLUR_ENABLED
+	#include "/lib/motion_blur.glsl"
+#endif
 
 void main() {
 	vec3 color = texelFetch(MAIN_BUFFER, texelcoord, 0).rgb;
@@ -39,7 +43,7 @@ void main() {
 	// ======== TAA ========
 	
 	#ifdef TAA_ENABLED
-		doTAA(color, prev, depth, linearDepth, prevCoord, handFactor);
+		doTAA(color, prev, linearDepth, prevCoord, handFactor);
 	#endif
 	
 	

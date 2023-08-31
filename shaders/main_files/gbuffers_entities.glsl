@@ -1,9 +1,26 @@
+// defines
+
+#if defined BLOOM_ENABLED && defined NORMALS_NEEDED
+	#define BLOOM_AND_NORMALS
+#endif
+
+// transferres
+
 varying vec2 texcoord;
 varying vec2 lmcoord;
 varying vec4 glcolor;
 
-#include "../lib/lighting.glsl"
-#include "/lib/fog.glsl"
+#ifdef NORMALS_NEEDED
+	varying vec3 normal;
+#endif
+
+// includes
+
+#include "/lib/lighting.glsl"
+#ifdef FOG_ENABLED
+	#include "/lib/fog.glsl"
+#endif
+
 
 
 
@@ -44,9 +61,16 @@ void main() {
 		color = vec4(debugOutput, 1.0);
 	#endif
 	gl_FragData[0] = color;
-	#ifdef BLOOM_ENABLED
+	#ifdef BLOOM_AND_NORMALS
+		/* DRAWBUFFERS:024 */
+		gl_FragData[1] = colorForBloom;
+		gl_FragData[2] = vec4(normal, 1.0);
+	#elif defined BLOOM_ENABLED
 		/* DRAWBUFFERS:02 */
 		gl_FragData[1] = colorForBloom;
+	#elif defined NORMALS_NEEDED
+		/* DRAWBUFFERS:04 */
+		gl_FragData[1] = vec4(normal, 1.0);
 	#endif
 }
 
@@ -79,6 +103,10 @@ void main() {
 	
 	
 	glcolor = gl_Color;
+	
+	#ifdef NORMALS_NEEDED
+		normal = gl_NormalMatrix * gl_Normal;
+	#endif
 	
 	
 	doPreLighting();

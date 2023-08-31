@@ -1,6 +1,13 @@
 // defines
 
-#if defined BLOOM_ENABLED && defined NORMALS_NEEDED
+#ifdef NORMALS_NEEDED
+	#define OUTPUT_NORMALS
+#endif
+#ifdef WATER_REFLECTIONS_ENABLED
+	#define NORMALS_NEEDED
+#endif
+
+#if defined BLOOM_ENABLED && defined OUTPUT_NORMALS
 	#define BLOOM_AND_NORMALS
 #endif
 
@@ -9,13 +16,16 @@
 varying vec2 texcoord;
 varying vec2 lmcoord;
 varying vec3 glcolor;
+flat int blockType;
 
-#ifdef RAIN_REFLECTIONS_ENABLED
-	varying vec3 worldPos;
-	varying float baseRainReflectionStrength;
-#endif
 #ifdef NORMALS_NEEDED
 	varying vec3 normal;
+#endif
+#ifdef WATER_REFLECTIONS_ENABLED
+	varying vec3 viewPos;
+#endif
+#ifdef WAVING_WATER_NORMALS_ENABLED
+	varying vec3 worldPos;
 #endif
 
 // includes
@@ -31,14 +41,41 @@ varying vec3 glcolor;
 
 #ifdef FSH
 
-#ifdef RAIN_REFLECTIONS_ENABLED
+#ifdef WAVING_WATER_NORMALS_ENABLED
 	#include "/lib/simplex_noise.glsl"
+#endif
+#ifdef WATER_REFLECTIONS_ENABLED
+	#include "/lib/reflections.glsl"
 #endif
 
 void main() {
 	vec4 color = texture2D(MAIN_BUFFER, texcoord);
 	#ifdef DEBUG_OUTPUT_ENABLED
 		vec3 debugOutput = vec3(0.0);
+	#endif
+	
+	color.rgb = mix(vec3(getColorLum(color.rgb)), color.rgb, 0.8);
+	
+	
+	// waving water normals
+	#ifdef WAVING_WATER_NORMALS_ENABLED
+		vec3 normal = normal;
+		if (blockType == 1007) {
+			vec3 worldPosForNormal = (worldPos + cameraPosition) * 0.3 + frameCounter * 0.007;
+			normal += simplexNoise3From4(vec4(worldPosForNormal, frameCounter * 0.005)) * 0.025;
+			normal = normalize(normal);
+		}
+	#endif
+	
+	
+	// fresnel addition
+	#ifdef WATER_RESNEL_ADDITION
+		if (blockType == 1007) {
+			vec3 worldPosForFresnel = (worldPos + cameraPosition) * 0.7 + frameCounter * 0.007;
+			vec3 normalForFresnel = normal + simplexNoise3From4(vec4(worldPosForFresnel, frameCounter * 0.007));
+			float fresnel = 1.0 + dot(normalize(viewPos), normalize(normalForFresnel));
+			color.rgb *= 0.8 + fresnel * 0.4;
+		}
 	#endif
 	
 	
@@ -62,10 +99,17 @@ void main() {
 	#ifdef BLOOM_ENABLED
 		#ifdef OVERWORLD
 			float blockLight = brightnesses.x;
-			const float nightBloomIncrease = 0.1;
-			float skyLight = brightnesses.y * (1.0 + nightBloomIncrease - rawSunTotal * nightBloomIncrease);
+			float skyLight = brightnesses.y * rawSunTotal;
 			colorForBloom.rgb *= max(blockLight * blockLight * 1.05, skyLight * 0.75);
 		#endif
+	#endif
+	
+	
+	// reflection
+	#ifdef WATER_REFLECTIONS_ENABLED
+		if (blockType == 1007) {
+			addReflection(color.rgb, viewPos, normal, MAIN_BUFFER_COPY, 0.3, 0.5);
+		}
 	#endif
 	
 	
@@ -78,21 +122,7 @@ void main() {
 		#endif
 	#endif
 	
-	
-	// show dangerous light
-	#ifdef SHOW_DANGEROUS_LIGHT
-		if (lmcoord.x < 0.5) {
-			color.rgb = mix(color.rgb, vec3(1.0, 0.0, 0.0), 0.6);
-		}
-	#endif
-	
-	
-	// rain reflection strength
-	#ifdef RAIN_REFLECTIONS_ENABLED
-		float rainReflectionStrength = baseRainReflectionStrength;
-		rainReflectionStrength *= simplexNoise((worldPos + cameraPosition) * 0.2);
-		rainReflectionStrength *= lmcoord.y;
-	#endif
+	//color.rgb = vec3(fresnel);
 	
 	
 	/* DRAWBUFFERS:0 */
@@ -101,21 +131,15 @@ void main() {
 	#endif
 	gl_FragData[0] = color;
 	#ifdef BLOOM_AND_NORMALS
-		/* DRAWBUFFERS:0243 */
+		/* DRAWBUFFERS:024 */
 		gl_FragData[1] = colorForBloom;
 		gl_FragData[2] = vec4(normal, 1.0);
-		#ifdef RAIN_REFLECTIONS_ENABLED
-			gl_FragData[3] = vec4(rainReflectionStrength, 0.0, 0.0, 1.0);
-		#endif
 	#elif defined BLOOM_ENABLED
 		/* DRAWBUFFERS:02 */
 		gl_FragData[1] = colorForBloom;
 	#elif defined NORMALS_NEEDED
-		/* DRAWBUFFERS:043 */
+		/* DRAWBUFFERS:04 */
 		gl_FragData[1] = vec4(normal, 1.0);
-		#ifdef RAIN_REFLECTIONS_ENABLED
-			gl_FragData[3] = vec4(rainReflectionStrength, 0.0, 0.0, 1.0);
-		#endif
 	#endif
 }
 
@@ -127,27 +151,30 @@ void main() {
 
 #ifdef VSH
 
-#include "/lib/waving.glsl"
-
 void main() {
 	texcoord = (gl_TextureMatrix[0] * gl_MultiTexCoord0).xy;
 	lmcoord  = (gl_TextureMatrix[1] * gl_MultiTexCoord1).xy;
 	
-	#if !defined RAIN_REFLECTIONS_ENABLED
+	
+	blockType = int(mc_Entity.x);
+	
+	#if !defined WAVING_WATER_NORMALS_ENABLED
 		vec3 worldPos;
 	#endif
 	worldPos = endMat(gbufferModelViewInverse * (gl_ModelViewMatrix * gl_Vertex));
 	
-	
-	#ifdef WAVING_ENABLED
-		applyWaving(worldPos);
+	#ifdef PHYSICALLY_WAVING_WATER_ENABLED
+		if (blockType == 1007) {
+			vec3 actualWorldPos = worldPos + cameraPosition;
+			worldPos.y += sin(actualWorldPos.x * 0.6 + actualWorldPos.z * 1.4 + frameCounter * 0.05) * 0.04;
+			worldPos.y += sin(actualWorldPos.x * 0.9 + actualWorldPos.z * 0.6 + frameCounter * 0.04) * 0.03;
+		}
 		gl_Position = gl_ProjectionMatrix * gbufferModelView * startMat(worldPos);
 	#else
 		gl_Position = gl_ProjectionMatrix * (gl_ModelViewMatrix * gl_Vertex);
 	#endif
 	
-	
-	if (gl_Position.z < -1.0) return; // simple but effective optimization
+	if (gl_Position.z < -1.5) return; // simple but effective optimization
 	
 	
 	#ifdef TAA_ENABLED
@@ -157,6 +184,11 @@ void main() {
 	
 	#ifdef FOG_ENABLED
 		getFogData(worldPos);
+	#endif
+	
+	
+	#ifdef WATER_REFLECTIONS_ENABLED
+		viewPos = (gl_ModelViewMatrix * gl_Vertex).xyz;
 	#endif
 	
 	
@@ -170,16 +202,6 @@ void main() {
 	
 	#ifdef NORMALS_NEEDED
 		normal = gl_NormalMatrix * gl_Normal;
-	#endif
-	
-	
-	#ifdef RAIN_REFLECTIONS_ENABLED
-		vec3 upVec = normalize(gbufferModelView[1].xyz);
-		baseRainReflectionStrength = dot(upVec, normal) * 0.5 + 0.5;
-		baseRainReflectionStrength *= baseRainReflectionStrength;
-		baseRainReflectionStrength *= baseRainReflectionStrength;
-		baseRainReflectionStrength *= baseRainReflectionStrength;
-		baseRainReflectionStrength *= betterRainStrength;
 	#endif
 	
 	
