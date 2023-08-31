@@ -37,7 +37,8 @@ vec2 reprojection(vec3 pos, vec3 cameraOffset) {
 
 
 
-void neighbourhoodClamping(vec3 color, inout vec3 prevColor) {
+void neighbourhoodClamping(vec3 color, inout vec3 prevColor, float rawDepth) {
+	float depth = toLinearDepth(rawDepth);
 	vec3 minColor = color;
 	vec3 maxColor = color;
 	
@@ -53,7 +54,7 @@ void neighbourhoodClamping(vec3 color, inout vec3 prevColor) {
 
 
 
-void doTAA(inout vec3 color, inout vec3 newPrev, float linearDepth, vec2 prevCoord, float handFactor) {
+void doTAA(inout vec3 color, inout vec3 newPrev, float depth, float linearDepth, vec2 prevCoord, float handFactor) {
 	
 	if (
 		prevCoord.x < 0.0 || prevCoord.x > 1.0 ||
@@ -65,23 +66,26 @@ void doTAA(inout vec3 color, inout vec3 newPrev, float linearDepth, vec2 prevCoo
 	
 	vec3 prevColor = texture2D(TAA_PREV_BUFFER, prevCoord).rgb;
 	
-	neighbourhoodClamping(color, prevColor);
+	neighbourhoodClamping(color, prevColor, depth);
 	
 	const float blendMin = 0.3;
 	const float blendMax = 0.98;
-	const float blendVariable = 0.15;
+	const float blendVariable = 0.2;
 	const float blendConstant = 0.65;
-	const float depthFactor = 0.017;
+	const float depthFactor = 0.13;
 	
 	vec2 velocity = (texcoord - prevCoord.xy) * viewSize;
 	float velocityAmount = dot(velocity, velocity) * 10.0;
 	
-	float blockDepth = linearDepth * far;
-	
 	float blendAmount = blendConstant
-		+ exp(-velocityAmount) * (blendVariable + sqrt(blockDepth) * depthFactor)
+		+ exp(-velocityAmount) * blendVariable
+		+ sqrt(linearDepth) * depthFactor
 		+ handFactor;
 	blendAmount = clamp(blendAmount, blendMin, blendMax);
+	//blendAmount *= float(
+	//	prevCoord.x > 0.0 && prevCoord.x < 1.0 &&
+	//	prevCoord.y > 0.0 && prevCoord.y < 1.0
+	//);
 	
 	color = mix(color, prevColor, blendAmount);
 	newPrev = color;

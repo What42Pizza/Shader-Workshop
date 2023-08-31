@@ -33,16 +33,18 @@ void doColorCorrection(inout vec3 color) {
 	#endif
 	
 	// contrast
-	color = mix(CONTRAST_DETECT_COLOR, color, CONTRAST / 5.0 + 1.0);
+	color = mix(CONTRAST_DETECT_COLOR, color, (CONTRAST - betterRainStrength * 0.15) / 5.0 + 1.0);
 	
 	// saturation & vibrance
 	float colorLum = getColorLum(color);
 	vec3 lumDiff = color - colorLum;
-	float saturationAmount = (SATURATION + SATURATION_LIGHT * pow3(colorLum) + SATURATION_DARK * pow3(1 - colorLum) * 2.0) / 2.0;
+	float saturationAmount = (SATURATION + SATURATION_LIGHT * pow3(colorLum) + SATURATION_DARK * pow3(1 - colorLum) * 2.0 - betterRainStrength * 0.1) / 2.0;
 	float vibranceAmount = maxAbs(lumDiff);
 	vibranceAmount = sqrt(vibranceAmount);
 	vibranceAmount *= pow10(1 - vibranceAmount * vibranceAmount) * VIBRANCE * 3.0;
 	color += lumDiff * (saturationAmount + vibranceAmount);
+	
+	color.b += betterRainStrength * 0.01;
 	
 	#ifdef USE_GAMMA_CORRECTION
 		#if GAMMA == 0

@@ -142,7 +142,7 @@ const bool colortex0MipmapEnabled = true;
 const bool colortex3MipmapEnabled = true;
 const float wetnessHalflife = 50.0f;
 const float drynessHalflife = 50.0f;
-const float centerDepthHalflife = 2.5f;
+const float centerDepthHalflife = 2.0f;
 const int noiseTextureResolution = 256;
 */
 
@@ -306,8 +306,8 @@ bool depthIsHand(float depth) {
 	}
 #else
 	float estimateDepthVSH() {
-		float len = length(gl_Position.xy) / max(gl_Position.w, 1.0);
-		return gl_Position.z * (1.0 + len * len * 0.7);
+		float len = length(gl_Position.xy / gl_Position.w);
+		return gl_Position.z * (1.0 + len * len * 0.3);
 	}
 #endif
 
@@ -457,11 +457,11 @@ vec3 getLessBiasedShadowPos(vec4 viewPos) {
 
 
 
-vec4 getSkylightPercents() {
-	vec4 skylightPercents = rawSkylightPercents;
-	skylightPercents.xzw *= 1.0 - rainStrength * (1.0 - RAIN_LIGHT_MULT);
-	return skylightPercents;
-}
+//vec4 getSkylightPercents() {
+//	vec4 skylightPercents = rawSkylightPercents;
+//	skylightPercents.xzw *= 1.0 - rainStrength * (1.0 - RAIN_LIGHT_MULT);
+//	return skylightPercents;
+//}
 
 
 
