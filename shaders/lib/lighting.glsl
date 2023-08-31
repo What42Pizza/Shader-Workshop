@@ -82,18 +82,23 @@ varying float skyBrightnessMult;
 	
 #endif
 
-#ifdef HANDHELD_LIGHT_ENABLED
-	varying float handLightBrightness;
-#endif
-
 
 
 
 
 float getSkyBrightnessMult(float lightDot) {
+	
+	//return sin((lightDot + 1.0) * PI / 4.0);
+	
+	//float temp = lightDot * 0.5 - 0.5;
+	//return temp * temp * temp + 1.0;
+	
+	//return pow(max(lightDot, 0.0), 0.12);
+	
 	const float curve = 3.0;
 	const float finalFactor = 1.0 / (1.0 - 1.0 / (curve * 10.0 + 1.0));
 	return (1.0 - 1.0 / (max(lightDot, 0.0) * curve * 10.0 + 1.0)) * finalFactor;
+	
 }
 
 
@@ -101,17 +106,17 @@ float getSkyBrightnessMult(float lightDot) {
 #ifdef FSH
 
 vec3 getLightColor(float blockBrightness, float skyBrightness, float ambientBrightness) {
-	vec3 ambientColor = getAmbientColor(rawSkylightPercents);
-	vec4 alteredSkylightPercents = rawSkylightPercents;
-	alteredSkylightPercents.xzw *= 1.0 - betterRainStrength * (1.0 - RAIN_LIGHT_MULT);
-	vec3 skyColor = getSkyColor(alteredSkylightPercents);
+	vec4 skylightPercents = getSkylightPercents();
+	vec3 skyColor = getSkyColor(skylightPercents);
+	vec3 ambientColor = getAmbientColor(skylightPercents);
 	
-	skyColor = mix(vec3(getColorLum(skyColor)), skyColor, 1.0 - betterRainStrength * 0.9);
-	ambientColor = mix(vec3(getColorLum(ambientColor)), ambientColor, 1.0 - betterRainStrength * 0.9);
-	
-	float ambientMin = 0.5;
+	#ifdef OVERWORLD
+		float ambientMin = 0.15;
+	#else
+		float ambientMin = 0.3;
+	#endif
 	#ifdef USE_VANILLA_BRIGHTNESS
-		ambientMin *= 0.7 + screenBrightness * 0.3;
+		ambientMin *= 0.33 + screenBrightness * 0.66;
 	#endif
 	
 	ambientBrightness = ambientBrightness * (1.0 - ambientMin) + ambientMin;
@@ -138,7 +143,7 @@ vec3 getLightingBrightnesses(vec2 lmcoord) {
 			
 			vec3 offsetShadowPos = shadowPos;
 			vec2 noise = randomVec2(rngStart);
-			offsetShadowPos.xy += noise * offsetMult * 0.25;
+			offsetShadowPos.xy += noise * offsetMult * 0.3;
 			
 			#if SHADOW_FILTERING == 0
 				
@@ -151,6 +156,8 @@ vec3 getLightingBrightnesses(vec2 lmcoord) {
 				
 				// filtered
 				// tactic: just absorb the shadow acne and average it out, then multiply and clamp to get back to 1.0
+				// actually I don't think that's how this works
+				// the problem is that the offset pos goes inside the block half the time, which gets counted as in shadow when the lightDot is low
 				for (int i = 0; i < SHADOW_OFFSET_COUNT; i++) {
 					if (texture2D(shadowtex0, offsetShadowPos.xy + SHADOW_OFFSETS[i].xy * offsetMult).r >= offsetShadowPos.z) {
 						float currentShadowWeight = SHADOW_OFFSETS[i].z;
@@ -175,13 +182,7 @@ vec3 getLightingBrightnesses(vec2 lmcoord) {
 	
 	
 	float blockBrightness = lmcoord.x;
-	#ifdef HANDHELD_LIGHT_ENABLED
-		blockBrightness = max(blockBrightness, handLightBrightness);
-	#endif
-	
 	float ambientBrightness = lmcoord.y;
-	
-	
 	return vec3(blockBrightness, skyBrightness, ambientBrightness);
 }
 
@@ -212,7 +213,6 @@ void doPreLighting() {
 		
 		if (lightDot > 0.0) { // vertex is facing towards the sky
 			vec4 viewPos = gl_ModelViewMatrix * gl_Vertex;
-			vec4 worldPos = gbufferModelViewInverse * viewPos;
 			#if SHADOW_FILTERING == 0
 				shadowPos = getShadowPos(viewPos, lightDot);
 			#else
@@ -229,12 +229,12 @@ void doPreLighting() {
 	
 	
 	#ifdef HANDHELD_LIGHT_ENABLED
-		handLightBrightness = 0.0;
 		float depth = estimateDepthVSH();
 		if (depth <= HANDHELD_LIGHT_DISTANCE) {
-			handLightBrightness = max(1.0 - depth / HANDHELD_LIGHT_DISTANCE, 0.0);
+			float handLightBrightness = max(1.0 - depth / HANDHELD_LIGHT_DISTANCE, 0.0);
 			handLightBrightness = handLightBrightness;
 			handLightBrightness *= heldBlockLightValue / 15.0 * HANDHELD_LIGHT_BRIGHTNESS;
+			lmcoord.x = max(lmcoord.x, handLightBrightness);
 		}
 	#endif
 	
