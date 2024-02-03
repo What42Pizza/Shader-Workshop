@@ -1,68 +1,61 @@
-// defines
-
-#if defined BLOOM_ENABLED && defined NORMALS_NEEDED
-	#define BLOOM_AND_NORMALS
-#endif
-
 // transfers
 
-varying vec2 texcoord;
-flat float glcolor;
-
-#ifdef NORMALS_NEEDED
-	varying vec3 normal;
-#endif
-
-// includes
-
-#ifdef FOG_ENABLED
-	#include "/lib/fog.glsl"
+#ifdef FIRST_PASS
+	
+	varying vec2 texcoord;
+	flat_inout float glcolor;
+	flat_inout vec3 colorMult;
+	#if HIDE_NEARBY_CLOUDS == 1
+		varying float opacity;
+	#endif
+	#if FOG_ENABLED == 1
+		varying float fogDistance;
+	#endif
+	
 #endif
 
 
 
 #ifdef FSH
 
+#if FOG_ENABLED == 1
+	#include "/lib/fog/getFogAmount.glsl"
+	#include "/lib/fog/applyFog.glsl"
+#endif
+
 void main() {
 	vec4 color = texture2D(MAIN_BUFFER, texcoord) * glcolor;
 	#ifdef DEBUG_OUTPUT_ENABLED
-		vec3 debugOutput = vec3(0.0);
+		vec4 debugOutput = vec4(0.0, 0.0, 0.0, color.a);
 	#endif
 	
 	
-	// bloom
-	#ifdef BLOOM_ENABLED
-		vec4 colorForBloom = color;
-		colorForBloom.rgb *= sqrt(BLOOM_CLOUD_BRIGHTNESS);
+	#if HIDE_NEARBY_CLOUDS == 0
+		#define opacity (1.0 - CLOUD_TRANSPARENCY)
 	#endif
+	color.a = opacity;
+	
+	
+	color.rgb *= colorMult;
 	
 	
 	// fog
-	#ifdef FOG_ENABLED
-		#ifdef BLOOM_ENABLED
-			applyFog(color.rgb, colorForBloom.rgb);
-		#else
-			applyFog(color.rgb);
-		#endif
+	#if FOG_ENABLED == 1
+		float fogAmount = getFogAmount(fogDistance  ARGS_IN);
+		applyFog(color.rgb, fogAmount  ARGS_IN);
 	#endif
 	
+	
+	
+	// outputs
+	
+	#ifdef DEBUG_OUTPUT_ENABLED
+		color = debugOutput;
+	#endif
 	
 	/* DRAWBUFFERS:0 */
-	#ifdef DEBUG_OUTPUT_ENABLED
-		color.rgb = debugOutput;
-	#endif
 	gl_FragData[0] = color;
-	#ifdef BLOOM_AND_NORMALS
-		/* DRAWBUFFERS:024 */
-		gl_FragData[1] = colorForBloom;
-		gl_FragData[2] = vec4(normal, 1.0);
-	#elif defined BLOOM_ENABLED
-		/* DRAWBUFFERS:02 */
-		gl_FragData[1] = colorForBloom;
-	#elif defined NORMALS_NEEDED
-		/* DRAWBUFFERS:04 */
-		gl_FragData[1] = vec4(normal, 1.0);
-	#endif
+	
 }
 
 #endif
@@ -71,25 +64,53 @@ void main() {
 
 #ifdef VSH
 
+#include "/utils/getSkyLight.glsl"
+#include "/utils/getAmbientLight.glsl"
+
+#if ISOMETRIC_RENDERING_ENABLED == 1
+	#include "/lib/isometric.glsl"
+#endif
+#if TAA_ENABLED == 1
+	#include "/lib/taa_jitter.glsl"
+#endif
+#if FOG_ENABLED == 1
+	#include "/lib/fog/getFogDistance.glsl"
+#endif
+
 void main() {
 	texcoord = (gl_TextureMatrix[0] * gl_MultiTexCoord0).xy;
 	
-	gl_Position = ftransform();
+	vec3 skyLight = getSkyLight(ARG_IN);
+	vec3 ambientLight = getAmbientLight(ARG_IN);
+	colorMult = skyLight + ambientLight;
+	//colorMult = mix(vec3(getColorLum(colorMult)), colorMult, vec3(1.0));
+	colorMult = normalize(colorMult) * 2.0 * CLOUDS_BRIGHTNESS;
 	
-	#ifdef TAA_ENABLED
-		gl_Position.xy += taaOffset * gl_Position.w;
+	#if ISOMETRIC_RENDERING_ENABLED == 1 || HIDE_NEARBY_CLOUDS == 1
+		#include "/import/gbufferModelViewInverse.glsl"
+		vec3 worldPos = endMat(gbufferModelViewInverse * (gl_ModelViewMatrix * gl_Vertex));
 	#endif
 	
-	#ifdef FOG_ENABLED
-		vec4 position = gl_Vertex;//gbufferModelViewInverse * (gl_ModelViewMatrix * gl_Vertex);
-		getFogData(position.xyz);
+	#if ISOMETRIC_RENDERING_ENABLED == 1
+		gl_Position = projectIsometric(worldPos  ARGS_IN);
+	#else
+		gl_Position = ftransform();
+	#endif
+	
+	#if TAA_ENABLED == 1
+		doTaaJitter(gl_Position.xy  ARGS_IN);
+	#endif
+	
+	#if FOG_ENABLED == 1
+		vec4 position = gl_Vertex;
+		fogDistance = getFogDistance(position.xyz  ARGS_IN);
+	#endif
+	
+	#if HIDE_NEARBY_CLOUDS == 1
+		opacity = (1.0 - CLOUD_TRANSPARENCY) * atan(length(worldPos) - 30.0) / PI + 0.5;
 	#endif
 	
 	glcolor = gl_Color.r;
-	
-	#ifdef NORMALS_NEEDED
-		normal = gl_NormalMatrix * gl_Normal;
-	#endif
 	
 }
 

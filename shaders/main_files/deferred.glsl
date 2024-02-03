@@ -1,58 +1,116 @@
-varying vec2 texcoord;
+//-----------------------------------//
+//        BEFORE TRANSPARENTS        //
+//-----------------------------------//
+
+
+
+#ifdef FIRST_PASS
+	varying vec2 texcoord;
+	flat_inout vec3 skyLight;
+#endif
+
+
 
 
 
 #ifdef FSH
 
-#ifdef RAIN_REFLECTIONS_ENABLED
-	#include "/lib/reflections.glsl"
+
+
+#include "/lib/lighting/shadows.glsl"
+
+#if SHADOWS_ENABLED == 1
+float getSkyBrightness(vec3 viewPos  ARGS_OUT) {
+#else
+float getSkyBrightness(ARG_OUT) {
 #endif
-#ifdef SSAO_ENABLED
-	#include "/lib/ssao.glsl"
+	
+	// get normal dot sun/moon pos
+	#ifdef OVERWORLD
+		vec3 normal = texelFetch(NORMALS_BUFFER, texelcoord, 0).rgb;
+		#include "/import/shadowLightPosition.glsl"
+		float lightDot = dot(normalize(shadowLightPosition), normal);
+	#else
+		float lightDot = 1.0;
+	#endif
+	
+	// sample shadow
+	#if SHADOWS_ENABLED == 1
+		float skyBrightness = sampleShadow(viewPos, lightDot  ARGS_IN);
+	#else
+		float skyBrightness = 0.95;
+	#endif
+	
+	// misc processing
+	skyBrightness *= max(lightDot, 0.0);
+	#include "/import/rainStrength.glsl"
+	skyBrightness *= 1.0 - rainStrength * (1.0 - RAIN_LIGHT_MULT) * 0.5;
+	
+	return skyBrightness;
+}
+
+
+
+#if FOG_ENABLED == 1
+	#include "/lib/fog/getFogDistance.glsl"
+	#include "/lib/fog/getFogAmount.glsl"
+	#include "/lib/fog/applyFog.glsl"
 #endif
+#include "/utils/depth.glsl"
+#include "/utils/screen_to_view.glsl"
+
+
 
 void main() {
-	vec3 color = texture2D(MAIN_BUFFER, texcoord).rgb;
+	vec3 color = texelFetch(MAIN_BUFFER, texelcoord, 0).rgb;
 	#ifdef DEBUG_OUTPUT_ENABLED
 		vec3 debugOutput = texelFetch(DEBUG_BUFFER, texelcoord, 0).rgb;
 	#endif
-	vec3 colorCopy = color;
 	
 	
-	
-	// ======== REFLECTIONS ========
-	
-	#ifdef RAIN_REFLECTIONS_ENABLED
-		float rainReflectionStrength = texelFetch(REFLECTION_STRENGTH_BUFFER, texelcoord, 0).r;
-		if (rainReflectionStrength > 0.01) {
-			vec3 viewPos = getViewPos(texcoord, texelFetch(DEPTH_BUFFER_ALL, texelcoord, 0).r);
-			if (viewPos != vec3(0.0)) {
-				vec3 normal = texelFetch(NORMALS_BUFFER, texelcoord, 0).rgb;
-				addReflection(color, viewPos, normal, MAIN_BUFFER, rainReflectionStrength, 0.0);
-			}
-		}
-	#endif
+	float depth = texelFetch(DEPTH_BUFFER_ALL, texelcoord, 0).r;
+	float linearDepth = toLinearDepth(depth  ARGS_IN);
 	
 	
-	
-	// ======== SSAO ========
-	
-	#ifdef SSAO_ENABLED
-		float aoFactor = getAoFactor();
-		color *= 1.0 - aoFactor * AO_AMOUNT;
-		#ifdef SSAO_SHOW_AMOUNT
-			debugOutput = vec3(1.0 - aoFactor);
+	if (linearDepth < 0.99) {
+		
+		
+		#if FOG_ENABLED == 1 || SHADOWS_ENABLED == 1
+			vec3 viewPos = screenToView(vec3(texcoord, depth)  ARGS_IN);
 		#endif
-	#endif
+		
+		
+		#if FOG_ENABLED == 1
+			#include "/import/gbufferModelViewInverse.glsl"
+			vec3 playerPos = (gbufferModelViewInverse * startMat(viewPos)).xyz;
+			float fogDistance = getFogDistance(playerPos  ARGS_IN);
+			float fogAmount = getFogAmount(fogDistance  ARGS_IN);
+		#endif
+		
+		
+		#if SHADOWS_ENABLED == 1
+			float skyBrightness = getSkyBrightness(viewPos  ARGS_IN);
+		#else
+			float skyBrightness = getSkyBrightness(ARG_IN);
+		#endif
+		color *= 1.0 + skyLight * skyBrightness * (1.0 - 0.6 * getColorLum(color));
+		
+		
+		#if FOG_ENABLED == 1
+			applyFog(color, fogAmount  ARGS_IN);
+		#endif
+		
+		
+	}
 	
 	
-	
-	/* DRAWBUFFERS:05 */
 	#ifdef DEBUG_OUTPUT_ENABLED
 		color = debugOutput;
 	#endif
+	
+	/* DRAWBUFFERS:0 */
 	gl_FragData[0] = vec4(color, 1.0);
-	gl_FragData[1] = vec4(colorCopy, 1.0);
+	
 }
 
 #endif
@@ -61,9 +119,12 @@ void main() {
 
 #ifdef VSH
 
+#include "/utils/getSkyLight.glsl"
+
 void main() {
-	texcoord = (gl_TextureMatrix[0] * gl_MultiTexCoord0).xy;
 	gl_Position = ftransform();
+	texcoord = gl_MultiTexCoord0.xy;
+	skyLight = getSkyLight(ARG_IN);
 }
 
 #endif

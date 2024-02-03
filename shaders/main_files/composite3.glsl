@@ -4,13 +4,15 @@
 
 
 
-varying vec2 texcoord;
+#ifdef FIRST_PASS
+	varying vec2 texcoord;
+#endif
 
 
 
 #ifdef FSH
 
-#ifdef DOF_ENABLED
+#if DOF_ENABLED == 1
 	#include "/lib/depth_of_field.glsl"
 #endif
 
@@ -24,17 +26,19 @@ void main() {
 	
 	// ======== DEPTH OF FIELD ========
 	
-	#ifdef DOF_ENABLED
-		doDOF(color DEBUG_ARG_IN);
+	#if DOF_ENABLED == 1
+		doDOF(color  DEBUG_ARGS_IN  ARGS_IN);
 	#endif
 	
 	
 	
-	/* DRAWBUFFERS:0 */
 	#ifdef DEBUG_OUTPUT_ENABLED
 		color = debugOutput;
 	#endif
+	
+	/* DRAWBUFFERS:0 */
 	gl_FragData[0] = vec4(color, 1.0);
+	
 }
 
 #endif

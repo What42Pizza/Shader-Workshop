@@ -4,7 +4,15 @@
 
 
 
-varying vec2 texcoord;
+#ifdef FIRST_PASS
+	
+	varying vec2 texcoord;
+	
+	#if BLOOM_ENABLED == 0
+		const bool colortex3MipmapEnabled = true;
+	#endif
+	
+#endif
 
 
 
@@ -28,6 +36,7 @@ void main() {
 	
 	/* DRAWBUFFERS:0 */
 	gl_FragData[0] = vec4(color, 1.0);
+	
 }
 
 #endif

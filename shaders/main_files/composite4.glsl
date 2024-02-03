@@ -4,17 +4,25 @@
 
 
 
-varying vec2 texcoord;
+#ifdef FIRST_PASS
+	varying vec2 texcoord;
+#endif
 
 
 
 #ifdef FSH
 
-#ifdef TAA_ENABLED
+#include "/utils/depth.glsl"
+#include "/utils/reprojection.glsl"
+
+#if TAA_ENABLED == 1
 	#include "/lib/taa.glsl"
 #endif
-#ifdef MOTION_BLUR_ENABLED
+#if MOTION_BLUR_ENABLED == 1
 	#include "/lib/motion_blur.glsl"
+#endif
+#if SHARPENING_ENABLED == 1
+	#include "/lib/sharpening.glsl"
 #endif
 
 void main() {
@@ -26,44 +34,58 @@ void main() {
 	
 	
 	
-	float depth = texelFetch(depthtex1, texelcoord, 0).r;
-	float linearDepth = toLinearDepth(depth);
+	float depth = texelFetch(DEPTH_BUFFER_WO_TRANS, texelcoord, 0).r;
+	float linearDepth = toLinearDepth(depth  ARGS_IN);
 	float handFactor = 0.0;
-	if (depthIsHand(linearDepth)) {
-		depth = fromLinearDepth(HAND_DEPTH);
-		handFactor = -0.25;
-	}
+	#if ISOMETRIC_RENDERING_ENABLED == 0
+		if (depthIsHand(linearDepth)) {
+			depth = fromLinearDepth(HAND_DEPTH  ARGS_IN);
+			handFactor = -0.25;
+		}
+	#endif
 	
-	vec3 coord = vec3(texcoord, depth);
+	vec3 pos = vec3(texcoord, depth);
+	#include "/import/cameraPosition.glsl"
+	#include "/import/previousCameraPosition.glsl"
 	vec3 cameraOffset = cameraPosition - previousCameraPosition;
-	vec2 prevCoord = reprojection(coord, cameraOffset);
+	vec2 prevCoord = reprojection(pos, cameraOffset  ARGS_IN);
 	
 	
 	
 	// ======== TAA ========
 	
-	#ifdef TAA_ENABLED
-		doTAA(color, prev, linearDepth, prevCoord, handFactor);
+	#if TAA_ENABLED == 1
+		doTAA(color, prev, linearDepth, prevCoord, handFactor  ARGS_IN);
 	#endif
 	
 	
 	
 	// ======== MOTION BLUR ========
 	
-	#ifdef MOTION_BLUR_ENABLED
+	#if MOTION_BLUR_ENABLED == 1
 		if (length(texcoord - prevCoord) > 0.00001) {
-			doMotionBlur(color, prevCoord);
+			doMotionBlur(color, prevCoord  ARGS_IN);
 		}
 	#endif
 	
 	
 	
-	/* DRAWBUFFERS:01 */
+	// ======== SHARPENING ========
+	
+	#if SHARPENING_ENABLED == 1
+		doSharpening(color  ARGS_IN);
+	#endif
+	
+	
+	
 	#ifdef DEBUG_OUTPUT_ENABLED
 		color = debugOutput;
 	#endif
+	
+	/* DRAWBUFFERS:01 */
 	gl_FragData[0] = vec4(color, 1.0);
 	gl_FragData[1] = vec4(prev, 1.0);
+	
 }
 
 #endif

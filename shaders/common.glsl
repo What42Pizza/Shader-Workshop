@@ -1,43 +1,8 @@
 const float PI = 3.1415926538;
 const float HALF_PI = PI / 2.0;
 
-uniform int frameCounter;
-uniform float frameTimeCounter;
-uniform vec3 fogColor;
-uniform vec3 skyColor;
-uniform vec4 entityColor;
-uniform float viewHeight;
-uniform float viewWidth;
-uniform float aspectRatio;
-uniform float frameTime;
-uniform float near;
-uniform float far;
-uniform int worldTime;
-uniform ivec2 eyeBrightnessSmooth;
-uniform float eyeAltitude;
-uniform int isEyeInWater;
-uniform int heldBlockLightValue;
-uniform float rainStrength;
-uniform float wetness;
-uniform float screenBrightness;
-uniform mat4 gbufferModelView;
-uniform mat4 gbufferModelViewInverse;
-uniform mat4 gbufferProjection;
-uniform mat4 gbufferProjectionInverse;
-uniform mat4 gbufferPreviousProjection;
-uniform mat4 gbufferPreviousModelView;
-uniform mat3 normalMatrix;
-uniform vec3 cameraPosition;
-uniform vec3 previousCameraPosition;
-uniform mat4 shadowModelView;
-uniform mat4 shadowProjection;
-uniform vec3 sunPosition;
-uniform vec3 moonPosition;
-uniform vec3 shadowLightPosition;
-
-#ifdef VSH
-	attribute vec4 mc_Entity;
-	attribute vec2 mc_midTexCoord;
+#ifdef FSH
+	ivec2 texelcoord = ivec2(gl_FragCoord.xy);
 #endif
 
 uniform sampler2D texture;
@@ -47,72 +12,35 @@ uniform sampler2D colortex1;
 uniform sampler2D colortex2;
 uniform sampler2D colortex3;
 uniform sampler2D colortex4;
-uniform sampler2D gaux2;
 uniform sampler2D depthtex0;
 uniform sampler2D depthtex1;
 uniform sampler2D depthtex2;
 uniform sampler2D shadowtex0;
-uniform sampler2D noisetex;
+//uniform sampler2D noisetex;
+
+//uniform float centerDepth;
+//uniform float centerDepthSmooth;
 
 
 
-// custom uniforms
-
-uniform float farPlusNear;
-uniform float farMinusNear;
-uniform float twoTimesNear;
-uniform float twoTimesNearTimesFar;
-uniform vec2 viewSize;
-uniform vec2 pixelSize;
-uniform int frameMod8;
-uniform float velocity;
-uniform float sharpenVelocityFactor;
-uniform float betterRainStrength;
-uniform float horizonAltitudeAddend;
-
-uniform bool isDay;
-uniform bool isOtherLightSource;
-uniform bool isSun;
-uniform float centerDepthSmooth; // needed for `centerLinearDepthSmooth` to work?
-uniform float centerLinearDepthSmooth;
-
-uniform vec2 taaOffset;
-
-uniform float sunriseTime;
-uniform vec4 rawSkylightPercents;
-uniform float rawSunTotal;
-
-uniform float invAspectRatio;
-uniform float invFar;
-uniform vec2 invViewSize;
-uniform vec2 invPixelSize;
-uniform float invFrameTime;
-uniform float invFarMinusNear;
-
-
-
-// misc data
-
-varying vec3 testValue;
+// misc defines
 
 #ifdef FSH
-	#define flat flat in
+	#define flat_inout flat in
+	//#define varying in
 #else
-	#define flat flat out
-#endif
-
-#ifdef FSH
-	ivec2 texelcoord = ivec2(gl_FragCoord.xy);
+	#define flat_inout flat out
+	//#define varying out
 #endif
 
 #define HAND_DEPTH 0.19 // idk what should actually be here
 
 #ifdef DEBUG_OUTPUT_ENABLED
-	#define DEBUG_ARG_IN , debugOutput
-	#define DEBUG_ARG_OUT , inout vec3 debugOutput
+	#define DEBUG_ARGS_IN , debugOutput
+	#define DEBUG_ARGS_OUT , inout vec3 debugOutput
 #else
-	#define DEBUG_ARG_IN
-	#define DEBUG_ARG_OUT
+	#define DEBUG_ARGS_IN
+	#define DEBUG_ARGS_OUT
 #endif
 
 
@@ -131,6 +59,8 @@ varying vec3 testValue;
 #define DEPTH_BUFFER_ALL                   depthtex0
 #define DEPTH_BUFFER_WO_TRANS              depthtex1
 #define DEPTH_BUFFER_WO_TRANS_OR_HANDHELD  depthtex2
+
+
 
 
 
@@ -183,6 +113,11 @@ float maxAbs(vec3 v) {
 	float g = abs(v.g);
 	float b = abs(v.b);
 	return max(max(r, g), b);
+}
+
+float percentThroughClamped(float value, float low, float high) {
+	float percentThrough = (value - low) / (high - low);
+	return clamp(percentThrough, 0.0, 1.0);
 }
 
 // all these smooth functions seem the same for speed
@@ -248,24 +183,13 @@ vec3 cubicInterpolate(vec3 edge0, vec3 edge1, vec3 edge2, vec3 edge3, float valu
 	return vec3(x, y, z);
 }
 
-vec4 startMat(vec3 screenPos) {
-	return vec4(screenPos.xyz, 1.0);
-}
 
-vec3 endMat(vec4 screenPos) {
-	return screenPos.xyz/screenPos.w;
-}
 
-float toLinearDepth(float depth) {
-	return twoTimesNear / (farPlusNear - depth * farMinusNear);
+vec4 startMat(vec3 pos) {
+	return vec4(pos.xyz, 1.0);
 }
-
-float fromLinearDepth(float depth) {
-	return (farPlusNear - twoTimesNear / depth) * invFarMinusNear;
-}
-
-float toBlockDepth(float depth) {
-	return twoTimesNearTimesFar / (farPlusNear - depth * farMinusNear);
+vec3 endMat(vec4 pos) {
+	return pos.xyz / pos.w;
 }
 
 bool depthIsSky(float depth) {
@@ -288,14 +212,33 @@ bool depthIsHand(float depth) {
 	}
 #endif
 
+void adjustLmcoord(inout vec2 lmcoord) {
+	const float low = 0.0333;
+	const float high = 0.95;
+	lmcoord -= low;
+	lmcoord /= high - low;
+	lmcoord = clamp(lmcoord, 0.0, 1.0);
+}
+
+vec3 getSkyLight(vec4 skylightPercents) {
+	vec3 skyLight = 
+		skylightPercents.x * SKYLIGHT_DAY_COLOR +
+		skylightPercents.y * SKYLIGHT_NIGHT_COLOR +
+		skylightPercents.z * SKYLIGHT_SUNRISE_COLOR +
+		skylightPercents.w * SKYLIGHT_SUNSET_COLOR;
+	return skyLight / 2.0;
+}
+
+vec3 getAmbientLight(vec4 skylightPercents, float ambientBrightness) {
+	vec3 ambient = 
+		skylightPercents.x * AMBIENT_DAY_COLOR +
+		skylightPercents.y * AMBIENT_NIGHT_COLOR +
+		skylightPercents.z * AMBIENT_SUNRISE_COLOR +
+		skylightPercents.w * AMBIENT_SUNSET_COLOR;
+	return mix(CAVE_AMBIENT_COLOR, ambient, ambientBrightness);
+}
 
 
-#ifdef FSH
-	uint rngStart =
-		uint(gl_FragCoord.x) +
-		uint(gl_FragCoord.y) * uint(viewWidth) +
-		uint(frameCounter  ) * uint(viewWidth) * uint(viewHeight);
-#endif
 
 #ifdef USE_BETTER_RAND
 	// taken from: https://www.reedbeta.com/blog/hash-functions-for-gpu-rendering/
@@ -303,8 +246,11 @@ bool depthIsHand(float depth) {
 		rng = rng * 747796405u + 2891336453u;
 		uint v = ((rng >> ((rng >> 28u) + 4u)) ^ rng) * 277803737u;
 		v = (v >> 22u) ^ v;
-		float f = float(v % 1000000u);
-		return f / 500000.0 - 1.0;
+		//float f = float(v % 1000000u);
+		//return f / 500000.0 - 1.0;
+		const uint BIT_MASK = (2u << 16u) - 1u;
+		float normalizedValue = float(v & BIT_MASK) / float(BIT_MASK);
+		return normalizedValue * 2.0 - 1.0;
 	}
 	/*
 	// maybe switch to this:
@@ -327,8 +273,11 @@ bool depthIsHand(float depth) {
 		rng ^= rotateRight(rng, 11u);
 		rng ^= rotateRight(rng, 17u);
 		rng ^= rotateRight(rng, 23u);
-		float f = float(rng % 1000000u);
-		return f / 500000.0 - 1.0;
+		//float f = float(rng % 1000000u);
+		//return f / 500000.0 - 1.0;
+		const uint BIT_MASK = (2u << 16u) - 1u;
+		float normalizedValue = float(rng & BIT_MASK) / float(BIT_MASK);
+		return normalizedValue * 2.0 - 1.0;
 	}
 #endif
 
@@ -350,7 +299,7 @@ vec3 randomVec3FromRValue(uint rng) {
 }
 
 float normalizeNoiseAround1(float noise, float range) {
-	return noise * range + 1.0;// - range / 2.0;
+	return noise * range + 1.0;
 }
 
 vec2 normalizeNoiseAround1(vec2 noise, float range) {
@@ -368,63 +317,6 @@ vec3 normalizeNoiseAround1(vec3 noise, float range) {
 
 
 
-
-
-// CODE FROM COMPLEMENTARY REIMAGINED:
-
-vec3 screenToView(vec3 pos) {
-	vec4 iProjDiag = vec4(
-		gbufferProjectionInverse[0].x,
-		gbufferProjectionInverse[1].y,
-		gbufferProjectionInverse[2].zw
-	);
-	vec3 p3 = pos * 2.0 - 1.0;
-	vec4 viewPos = iProjDiag * p3.xyzz + gbufferProjectionInverse[3];
-	return viewPos.xyz / viewPos.w;
-}
-
-float sqrt3(float x) {
-	x = 1.0 - x;
-	x *= x;
-	x *= x;
-	x *= x;
-	return 1.0 - x;
-}
-
-// END OF COMPLEMENTARY REIMAGINED'S CODE
-
-vec3 getViewPos(vec2 coords, float rawDepth) {
-	float linearDepth = toLinearDepth(rawDepth);
-	if (depthIsSky(linearDepth) || depthIsHand(linearDepth)) {
-		return vec3(0.0);
-	}
-	vec3 screenPos = vec3(coords, rawDepth);
-	return screenToView(screenPos);
-}
-
-
-
-
-
-#ifdef FSH
-
-float fogify(float x, float w) {
-	return w / (x * x + w);
-}
-
-vec3 getSkyColor() {
-	vec4 pos = vec4(gl_FragCoord.xy * invViewSize * 2.0 - 1.0, 1.0, 1.0);
-	pos = gbufferProjectionInverse * pos;
-	float upDot = dot(normalize(pos.xyz), gbufferModelView[1].xyz);
-	return mix(skyColor, fogColor, fogify(max(upDot, 0.0), 0.25));
-}
-
-#endif
-
-
-
-
-
 float cubeLength(vec2 v) {
 	return pow(abs(v.x * v.x * v.x) + abs(v.y * v.y * v.y), 1.0 / 3.0);
 }
@@ -439,49 +331,4 @@ vec3 distort(vec3 v, float distortFactor) {
 
 vec3 distort(vec3 v) {
 	return distort(v, getDistortFactor(v));
-}
-
-
-
-vec3 getShadowPos(vec4 viewPos, float lightDot) {
-	vec4 playerPos = gbufferModelViewInverse * viewPos;
-	vec3 shadowPos = (shadowProjection * (shadowModelView * playerPos)).xyz; // convert to shadow screen space
-	float distortFactor = getDistortFactor(shadowPos);
-	float bias = 0.05
-		+ 0.01 / (lightDot + 0.03)
-		+ distortFactor * distortFactor * 0.5;
-	shadowPos = distort(shadowPos, distortFactor); // apply shadow distortion
-	shadowPos = shadowPos * 0.5 + 0.5;
-	shadowPos.z -= bias * 0.02; // apply shadow bias
-	return shadowPos;
-}
-
-vec3 getLessBiasedShadowPos(vec4 viewPos) {
-	vec4 playerPos = gbufferModelViewInverse * viewPos;
-	vec3 shadowPos = (shadowProjection * (shadowModelView * playerPos)).xyz; // convert to shadow screen space
-	float distortFactor = getDistortFactor(shadowPos);
-	shadowPos = distort(shadowPos, distortFactor); // apply shadow distortion
-	shadowPos = shadowPos * 0.5 + 0.5;
-	shadowPos.z -= 0.005 * distortFactor; // apply shadow bias
-	return shadowPos;
-}
-
-
-
-
-
-vec3 getSkyColor(vec4 skylightPercents) {
-	return
-		skylightPercents.x * SKYLIGHT_DAY_COLOR +
-		skylightPercents.y * SKYLIGHT_NIGHT_COLOR +
-		skylightPercents.z * SKYLIGHT_SUNRISE_COLOR +
-		skylightPercents.w * SKYLIGHT_SUNSET_COLOR;
-}
-
-vec3 getAmbientColor(vec4 skylightPercents) {
-	return
-		skylightPercents.x * AMBIENT_DAY_COLOR +
-		skylightPercents.y * AMBIENT_NIGHT_COLOR +
-		skylightPercents.z * AMBIENT_SUNRISE_COLOR +
-		skylightPercents.w * AMBIENT_SUNSET_COLOR;
 }

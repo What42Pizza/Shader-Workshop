@@ -1,24 +1,19 @@
-// defines
-
-#undef SHADOWS_ENABLED
-
-#if defined BLOOM_ENABLED && defined NORMALS_NEEDED
-	#define BLOOM_AND_NORMALS
-#endif
-
 // transfers
 
-varying vec2 texcoord;
-varying vec2 lmcoord;
-varying vec4 glcolor;
-
-#ifdef NORMALS_NEEDED
+#ifdef FIRST_PASS
+	
+	varying vec2 texcoord;
+	varying vec2 lmcoord;
+	varying vec4 glcolor;
+	
 	varying vec3 normal;
+	
 #endif
 
 // includes
 
-#include "/lib/lighting.glsl"
+#include "/lib/lighting/pre_lighting.glsl"
+#include "/lib/lighting/basic_lighting.glsl"
 
 
 
@@ -29,43 +24,32 @@ varying vec4 glcolor;
 void main() {
 	vec4 color = texture2D(MAIN_BUFFER, texcoord) * glcolor;
 	#ifdef DEBUG_OUTPUT_ENABLED
-		vec3 debugOutput = vec3(0.0);
+		vec4 debugOutput = vec4(0.0, 0.0, 0.0, color.a);
 	#endif
 	
 	
 	
 	// main lighting
 	
-	vec3 brightnesses = getLightingBrightnesses(lmcoord);
-	color.rgb *= getLightColor(brightnesses.x, brightnesses.y, brightnesses.z);
+	color.rgb *= getBasicLighting(lmcoord.x, lmcoord.y  ARGS_IN);
 	
 	
 	
-	// bloom value
+	// outputs
 	
-	#ifdef BLOOM_ENABLED
-		vec4 colorForBloom = color;
-		colorForBloom.rgb *= sqrt(BLOOM_HAND_BRIGHTNESS);
-	#endif
-	
-	
-	
-	/* DRAWBUFFERS:0 */
 	#ifdef DEBUG_OUTPUT_ENABLED
-		color = vec4(debugOutput, 1.0);
+		color = debugOutput;
 	#endif
+	
+	/* DRAWBUFFERS:04 */
 	gl_FragData[0] = color;
-	#ifdef BLOOM_AND_NORMALS
-		/* DRAWBUFFERS:024 */
-		gl_FragData[1] = colorForBloom;
-		gl_FragData[2] = vec4(normal, 1.0);
-	#elif defined BLOOM_ENABLED
-		/* DRAWBUFFERS:02 */
-		gl_FragData[1] = colorForBloom;
-	#elif defined NORMALS_NEEDED
-		/* DRAWBUFFERS:04 */
-		gl_FragData[1] = vec4(normal, 1.0);
+	gl_FragData[1] = vec4(normal, 1.0);
+	
+	#if REFLECTIONS_ENABLED == 1
+		/* DRAWBUFFERS:043 */
+		gl_FragData[2] = vec4(0.0, 0.0, 0.0, 1.0);
 	#endif
+	
 }
 
 #endif
@@ -76,25 +60,38 @@ void main() {
 
 #ifdef VSH
 
+#if ISOMETRIC_RENDERING_ENABLED == 1
+	#include "/lib/isometric.glsl"
+#endif
+#if TAA_ENABLED == 1
+	#include "/lib/taa_jitter.glsl"
+#endif
+
 void main() {
 	texcoord = (gl_TextureMatrix[0] * gl_MultiTexCoord0).xy;
 	lmcoord  = (gl_TextureMatrix[1] * gl_MultiTexCoord1).xy;
+	adjustLmcoord(lmcoord);
 	
 	
-	gl_Position = ftransform();
-	#ifdef TAA_ENABLED
-		gl_Position.xy += taaOffset * gl_Position.w;
+	#if ISOMETRIC_RENDERING_ENABLED == 1
+		#include "/import/gbufferModelViewInverse.glsl"
+		vec3 worldPos = endMat(gbufferModelViewInverse * (gl_ModelViewMatrix * gl_Vertex));
+		gl_Position = projectIsometric(worldPos);
+	#else
+		gl_Position = ftransform();
+	#endif
+	
+	#if TAA_ENABLED == 1
+		doTaaJitter(gl_Position.xy  ARGS_IN);
 	#endif
 	
 	
 	glcolor = gl_Color;
 	
-	#ifdef NORMALS_NEEDED
-		normal = gl_NormalMatrix * gl_Normal;
-	#endif
+	normal = gl_NormalMatrix * gl_Normal;
 	
 	
-	doPreLighting();
+	doPreLighting(ARG_IN);
 	
 }
 

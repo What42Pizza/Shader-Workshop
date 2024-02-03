@@ -1,17 +1,23 @@
 // defines
 
-#if defined BLOOM_ENABLED && defined NORMALS_NEEDED
-	#define BLOOM_AND_NORMALS
-#endif
+#undef SHADOWS_ENABLED
 
 // transfers
 
-varying vec2 texcoord;
-varying float lightMult;
-
-#ifdef NORMALS_NEEDED
+#ifdef FIRST_PASS
+	
+	varying vec2 texcoord;
+	varying vec2 lmcoord;
+	varying vec4 glcolor;
+	
 	varying vec3 normal;
+	
 #endif
+
+// includes
+
+#include "/lib/lighting/pre_lighting.glsl"
+#include "/lib/lighting/basic_lighting.glsl"
 
 
 
@@ -20,29 +26,32 @@ varying float lightMult;
 #ifdef FSH
 
 void main() {
-	vec4 color = texture2D(MAIN_BUFFER, texcoord);
+	vec4 color = texture2D(MAIN_BUFFER, texcoord) * glcolor;
 	#ifdef DEBUG_OUTPUT_ENABLED
-		vec3 debugOutput = vec3(0.0);
+		vec4 debugOutput = vec4(0.0, 0.0, 0.0, color.a);
 	#endif
 	
-	color.rgb *= lightMult;
 	
-	/* DRAWBUFFERS:0 */
+	
+	color.rgb *= getBasicLighting(lmcoord.x, lmcoord.y  ARGS_IN);
+	
+	
+	
+	// outputs
+	
 	#ifdef DEBUG_OUTPUT_ENABLED
-		color = vec4(debugOutput, 1.0);
+		color = debugOutput;
 	#endif
+	
+	/* DRAWBUFFERS:04 */
 	gl_FragData[0] = color;
-	#ifdef BLOOM_AND_NORMALS
-		/* DRAWBUFFERS:024 */
-		gl_FragData[1] = color;
-		gl_FragData[2] = vec4(normal, 1.0);
-	#elif defined BLOOM_ENABLED
-		/* DRAWBUFFERS:02 */
-		gl_FragData[1] = color;
-	#elif defined NORMALS_NEEDED
-		/* DRAWBUFFERS:04 */
-		gl_FragData[1] = vec4(normal, 1.0);
+	gl_FragData[1] = vec4(normal, 1.0);
+	
+	#if REFLECTIONS_ENABLED == 1
+		/* DRAWBUFFERS:043 */
+		gl_FragData[2] = vec4(0.0, 0.0, 0.0, 1.0);
 	#endif
+	
 }
 
 #endif
@@ -53,25 +62,43 @@ void main() {
 
 #ifdef VSH
 
+#if ISOMETRIC_RENDERING_ENABLED == 1
+	#include "/lib/isometric.glsl"
+#endif
+#if TAA_ENABLED == 1
+	#include "/lib/taa_jitter.glsl"
+#endif
+
 void main() {
 	texcoord = (gl_TextureMatrix[0] * gl_MultiTexCoord0).xy;
-	vec2 lmcoord  = (gl_TextureMatrix[1] * gl_MultiTexCoord1).xy;
-	lightMult = max(max(lmcoord.x, lmcoord.y), 0.1);
+	lmcoord  = (gl_TextureMatrix[1] * gl_MultiTexCoord1).xy;
+	adjustLmcoord(lmcoord);
 	
 	
-	gl_Position = ftransform();
-	if (gl_Position.z < -1.0) return; // simple but effective optimization
+	#if ISOMETRIC_RENDERING_ENABLED == 1
+		#include "/import/gbufferModelViewInverse.glsl"
+		vec3 worldPos = endMat(gbufferModelViewInverse * (gl_ModelViewMatrix * gl_Vertex));
+		gl_Position = projectIsometric(worldPos  ARGS_IN);
+	#else
+		gl_Position = ftransform();
+	#endif
 	
-	
-	#ifdef TAA_ENABLED
-		gl_Position.xy += taaOffset * gl_Position.w;
+	#if ISOMETRIC_RENDERING_ENABLED == 0
+		if (gl_Position.z < -1.0) return; // simple but effective optimization
 	#endif
 	
 	
-	#ifdef NORMALS_NEEDED
-		normal = gl_NormalMatrix * gl_Normal;
+	#if TAA_ENABLED == 1
+		doTaaJitter(gl_Position.xy  ARGS_IN);
 	#endif
 	
+	
+	glcolor = gl_Color;
+	
+	normal = gl_NormalMatrix * gl_Normal;
+	
+	
+	doPreLighting(ARG_IN);
 	
 }
 
